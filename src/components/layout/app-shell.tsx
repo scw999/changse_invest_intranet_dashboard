@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Archive,
+  Bell,
   BookOpenText,
   ChartCandlestick,
   LayoutDashboard,
@@ -12,6 +13,8 @@ import {
   WalletCards,
 } from "lucide-react";
 
+import { ResearchBootstrap } from "@/components/layout/research-bootstrap";
+import { SyncStatusBanner } from "@/components/layout/sync-status-banner";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -29,6 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1700px] gap-4 px-3 py-3 md:gap-6 md:px-6 md:py-6">
+      <ResearchBootstrap />
       <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[290px] shrink-0 flex-col rounded-[34px] border border-[var(--border-soft)] bg-[rgba(15,27,45,0.94)] p-6 text-white shadow-[0_32px_90px_rgba(7,17,31,0.28)] lg:flex">
         <div>
           <p className="text-xs font-semibold tracking-[0.24em] text-white/55">
@@ -84,6 +88,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mt-4 rounded-2xl border border-[rgba(200,157,97,0.25)] bg-[rgba(200,157,97,0.08)] p-4 text-sm leading-6 text-white/78">
             현재는 시드 데이터와 브라우저 저장 기반 MVP입니다. 다음 단계에서 같은 구조를 Supabase CRUD로 자연스럽게 연결할 수 있습니다.
           </div>
+          <div className="mt-4 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-white/74">
+            <div className="flex items-center gap-2 font-semibold text-white/88">
+              <Bell className="h-4 w-4" />
+              데이터 소스 상태
+            </div>
+            <div className="mt-3">
+              <SyncStatusBanner />
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -102,7 +115,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 space-y-6">{children}</main>
+        <main className="flex-1 space-y-4 md:space-y-6">
+          <div className="lg:hidden">
+            <SyncStatusBanner />
+          </div>
+          {children}
+        </main>
       </div>
 
       <nav className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 rounded-[22px] border border-[rgba(16,29,46,0.1)] bg-[rgba(255,255,255,0.94)] p-1.5 shadow-[0_22px_70px_rgba(16,29,46,0.18)] backdrop-blur-lg lg:hidden">

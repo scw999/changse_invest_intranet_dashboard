@@ -18,6 +18,15 @@ type ThemeInput = Omit<Theme, "id" | "slug"> & { slug?: string };
 type PortfolioInput = Omit<PortfolioItem, "id">;
 type PreferencePatch = Partial<UserPreferences>;
 type FollowUpInput = Omit<FollowUpRecord, "id">;
+export type DataSource = "mock" | "supabase";
+export type SyncStatus = "idle" | "loading" | "success" | "error";
+
+type SyncState = {
+  dataSource: DataSource;
+  syncStatus: SyncStatus;
+  syncMessage?: string;
+  lastSyncedAt?: string;
+};
 
 type ResearchActions = {
   addNewsItem: (input: NewsInput) => void;
@@ -31,10 +40,15 @@ type ResearchActions = {
   deletePortfolioItem: (id: string) => void;
   updatePreferences: (patch: PreferencePatch) => void;
   upsertFollowUp: (newsItemId: string, patch: Omit<FollowUpInput, "newsItemId">) => void;
+  hydrateDataset: (
+    dataset: ResearchDataset,
+    meta?: { source?: DataSource; message?: string },
+  ) => void;
+  setSyncState: (state: Partial<SyncState>) => void;
   resetData: () => void;
 };
 
-export type ResearchStore = ResearchDataset & ResearchActions;
+export type ResearchStore = ResearchDataset & SyncState & ResearchActions;
 
 function createId(prefix: string) {
   const uuid = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 10);
@@ -74,6 +88,10 @@ export const useResearchStore = create<ResearchStore>()(
   persist(
     (set) => ({
       ...cloneMockDataset(),
+      dataSource: "mock",
+      syncStatus: "idle",
+      syncMessage: "시드 데이터로 시작했습니다.",
+      lastSyncedAt: undefined,
       addNewsItem: (input) =>
         set((state) => {
           const timestamp = new Date().toISOString();
@@ -194,7 +212,23 @@ export const useResearchStore = create<ResearchStore>()(
             ),
           };
         }),
-      resetData: () => set(() => cloneMockDataset()),
+      hydrateDataset: (dataset, meta) =>
+        set(() => ({
+          ...dataset,
+          dataSource: meta?.source ?? "supabase",
+          syncStatus: "success",
+          syncMessage: meta?.message ?? "Supabase에서 최신 데이터를 불러왔습니다.",
+          lastSyncedAt: new Date().toISOString(),
+        })),
+      setSyncState: (state) => set(() => state),
+      resetData: () =>
+        set(() => ({
+          ...cloneMockDataset(),
+          dataSource: "mock",
+          syncStatus: "idle",
+          syncMessage: "시드 데이터로 초기화했습니다.",
+          lastSyncedAt: undefined,
+        })),
     }),
     {
       name: "changse-invest-research-mvp",
