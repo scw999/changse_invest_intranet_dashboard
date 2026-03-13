@@ -1,43 +1,23 @@
 import { NextResponse } from "next/server";
 
 import { assertInternalAssistantRequest } from "@/lib/auth/internal";
-import { fetchResearchDataset } from "@/lib/supabase/research";
-import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import {
+  formatZodError,
+  internalNewsIngestSchema,
+} from "@/lib/server/assistant-ingest";
 import {
   buildFollowUpCopy,
   ensureMutationSuccess,
   resolveEntityId,
   resolveResearchOwnerId,
+  resolveThemeIds,
+  resolveTickerIds,
   type NewsMutationInput,
 } from "@/lib/server/private-admin";
+import { fetchResearchDataset } from "@/lib/supabase/research";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
-type NewsIngestBody =
-  | ({ operation: "upsert"; id?: string } & NewsMutationInput)
-  | { operation: "delete"; id: string };
-
-function isNewsPayload(value: Partial<NewsMutationInput> | null): value is NewsMutationInput {
-  return Boolean(
-    value &&
-      typeof value.title === "string" &&
-      typeof value.summary === "string" &&
-      typeof value.sourceName === "string" &&
-      typeof value.sourceUrl === "string" &&
-      typeof value.publishedAt === "string" &&
-      typeof value.scanSlot === "string" &&
-      typeof value.region === "string" &&
-      Array.isArray(value.affectedAssetClasses) &&
-      Array.isArray(value.relatedThemeIds) &&
-      Array.isArray(value.relatedTickerIds) &&
-      typeof value.marketInterpretation === "string" &&
-      typeof value.directionalView === "string" &&
-      typeof value.actionIdea === "string" &&
-      typeof value.followUpStatus === "string" &&
-      typeof value.followUpNote === "string" &&
-      typeof value.importance === "string",
-  );
-}
 
 function toNewsRow(payload: NewsMutationInput) {
   return {
@@ -152,18 +132,23 @@ export async function POST(request: Request) {
   try {
     assertInternalAssistantRequest(request);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unauthorized." }, { status: 401 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unauthorized." },
+      { status: 401 },
+    );
   }
 
-  const body = (await request.json().catch(() => null)) as NewsIngestBody | null;
+  const rawBody = await request.json().catch(() => null);
+  const parsed = internalNewsIngestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
+  }
+
+  const body = parsed.data;
   const client = createServiceRoleSupabaseClient();
   const ownerId = await resolveResearchOwnerId(client, "assistant-system");
 
   try {
-    if (!body) {
-      return NextResponse.json({ error: "Invalid ingest payload." }, { status: 400 });
-    }
-
     if (body.operation === "delete") {
       const resolvedId = await resolveEntityId(client, "news_items", ownerId, body.id);
       const { error } = await client
@@ -173,26 +158,28 @@ export async function POST(request: Request) {
         .eq("id", resolvedId);
       ensureMutationSuccess(error, "Failed to delete news item.");
     } else {
-      if (!isNewsPayload(body)) {
-        return NextResponse.json({ error: "Invalid news ingest payload." }, { status: 400 });
-      }
+      const normalizedPayload: NewsMutationInput = {
+        ...body,
+        relatedThemeIds: await resolveThemeIds(client, ownerId, body.relatedThemeIds),
+        relatedTickerIds: await resolveTickerIds(client, ownerId, body.relatedTickerIds),
+      };
 
       if (body.id) {
         const resolvedId = await resolveEntityId(client, "news_items", ownerId, body.id);
         const { error } = await client
           .from("news_items")
-          .update(toNewsRow(body))
+          .update(toNewsRow(normalizedPayload))
           .eq("owner_id", ownerId)
           .eq("id", resolvedId);
         ensureMutationSuccess(error, "Failed to update news item.");
-        await syncNewsRelations(client, ownerId, resolvedId, body);
-        await syncFollowUp(client, ownerId, resolvedId, body);
+        await syncNewsRelations(client, ownerId, resolvedId, normalizedPayload);
+        await syncFollowUp(client, ownerId, resolvedId, normalizedPayload);
       } else {
         const { data, error } = await client
           .from("news_items")
           .insert({
             owner_id: ownerId,
-            ...toNewsRow(body),
+            ...toNewsRow(normalizedPayload),
           })
           .select("id")
           .single();
@@ -201,8 +188,8 @@ export async function POST(request: Request) {
           throw new Error("Failed to create news item id.");
         }
 
-        await syncNewsRelations(client, ownerId, data.id, body);
-        await syncFollowUp(client, ownerId, data.id, body);
+        await syncNewsRelations(client, ownerId, data.id, normalizedPayload);
+        await syncFollowUp(client, ownerId, data.id, normalizedPayload);
       }
     }
 

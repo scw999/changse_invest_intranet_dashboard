@@ -17,6 +17,8 @@ import type {
 
 type OwnerRow = { owner_id: string };
 type IdRow = { id: string };
+type ThemeLookupRow = { id: string; name: string; slug: string };
+type TickerLookupRow = { id: string; symbol: string; name: string };
 
 export type NewsMutationInput = {
   title: string;
@@ -127,6 +129,10 @@ export function slugifyThemeName(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function normalizeLookupKey(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "").replace(/_/g, "").replace(/\./g, "");
+}
+
 export function buildFollowUpCopy(status: FollowUpStatus, resultNote: string) {
   const trimmedNote = resultNote.trim();
 
@@ -202,6 +208,89 @@ export async function resolveEntityId(
   }
 
   throw new Error(`No ${table} row matched ref ${idOrRef}.`);
+}
+
+export async function resolveThemeIds(
+  client: SupabaseClient,
+  ownerId: string,
+  values: string[],
+) {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await client.from("themes").select("id, name, slug").eq("owner_id", ownerId);
+  ensureMutationSuccess(error, "Failed to load themes.");
+
+  const rows = (data ?? []) as ThemeLookupRow[];
+
+  return values.map((value) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new Error("Theme references cannot be empty.");
+    }
+
+    const exact = rows.find((row) => row.id === trimmed || row.id.endsWith(trimmed));
+    if (exact) {
+      return exact.id;
+    }
+
+    const lookupKey = normalizeLookupKey(trimmed);
+    const lookupSlug = slugifyThemeName(trimmed);
+    const match = rows.find(
+      (row) =>
+        normalizeLookupKey(row.name) === lookupKey ||
+        normalizeLookupKey(row.slug) === lookupKey ||
+        row.slug === lookupSlug,
+    );
+
+    if (!match) {
+      throw new Error(`No theme matched "${trimmed}".`);
+    }
+
+    return match.id;
+  });
+}
+
+export async function resolveTickerIds(
+  client: SupabaseClient,
+  ownerId: string,
+  values: string[],
+) {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await client
+    .from("tickers")
+    .select("id, symbol, name")
+    .eq("owner_id", ownerId);
+  ensureMutationSuccess(error, "Failed to load tickers.");
+
+  const rows = (data ?? []) as TickerLookupRow[];
+
+  return values.map((value) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new Error("Ticker references cannot be empty.");
+    }
+
+    const upper = trimmed.toUpperCase();
+    const exact = rows.find(
+      (row) => row.id === trimmed || row.id.endsWith(trimmed) || row.symbol.toUpperCase() === upper,
+    );
+    if (exact) {
+      return exact.id;
+    }
+
+    const lookupKey = normalizeLookupKey(trimmed);
+    const match = rows.find((row) => normalizeLookupKey(row.name) === lookupKey);
+    if (!match) {
+      throw new Error(`No ticker matched "${trimmed}".`);
+    }
+
+    return match.id;
+  });
 }
 
 export async function upsertPortfolioItem(

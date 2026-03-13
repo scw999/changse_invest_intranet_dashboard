@@ -1,15 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
 export function createBrowserSupabaseClient() {
   const { supabaseUrl, supabaseAnonKey } = getSupabaseEnv();
 
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
+  return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }

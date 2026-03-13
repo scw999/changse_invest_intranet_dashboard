@@ -1,32 +1,20 @@
 import { NextResponse } from "next/server";
 
 import { assertInternalAssistantRequest } from "@/lib/auth/internal";
-import { fetchResearchDataset } from "@/lib/supabase/research";
-import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import {
+  formatZodError,
+  internalThemeIngestSchema,
+} from "@/lib/server/assistant-ingest";
 import {
   deleteTheme,
   resolveEntityId,
   resolveResearchOwnerId,
   upsertTheme,
-  type ThemeMutationInput,
 } from "@/lib/server/private-admin";
+import { fetchResearchDataset } from "@/lib/supabase/research";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
-type ThemeIngestBody =
-  | ({ operation: "upsert" } & ThemeMutationInput)
-  | { operation: "delete"; id: string };
-
-function isThemePayload(value: Partial<ThemeMutationInput> | null): value is ThemeMutationInput {
-  return Boolean(
-    value &&
-      typeof value.name === "string" &&
-      typeof value.description === "string" &&
-      typeof value.category === "string" &&
-      typeof value.priority === "string" &&
-      typeof value.color === "string",
-  );
-}
 
 export async function POST(request: Request) {
   try {
@@ -38,27 +26,24 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = (await request.json().catch(() => null)) as ThemeIngestBody | null;
+  const rawBody = await request.json().catch(() => null);
+  const parsed = internalThemeIngestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
+  }
+
+  const body = parsed.data;
   const client = createServiceRoleSupabaseClient();
   const ownerId = await resolveResearchOwnerId(client, "assistant-system");
 
   try {
-    if (!body) {
-      return NextResponse.json({ error: "Invalid ingest payload." }, { status: 400 });
-    }
-
     if (body.operation === "delete") {
       const resolvedId = await resolveEntityId(client, "themes", ownerId, body.id);
       await deleteTheme(client, ownerId, resolvedId);
     } else {
-      if (!isThemePayload(body)) {
-        return NextResponse.json({ error: "Invalid theme ingest payload." }, { status: 400 });
-      }
-
       const resolvedId = body.id
         ? await resolveEntityId(client, "themes", ownerId, body.id)
         : undefined;
-
       await upsertTheme(client, ownerId, {
         ...body,
         ...(resolvedId ? { id: resolvedId } : {}),

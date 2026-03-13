@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -43,13 +44,23 @@ export function AppShell({
 
       <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[290px] shrink-0 flex-col rounded-[34px] border border-[var(--border-soft)] bg-[rgba(15,27,45,0.94)] p-6 text-white shadow-[0_32px_90px_rgba(7,17,31,0.28)] lg:flex">
         <div>
-          <p className="text-xs font-semibold tracking-[0.24em] text-white/55">창세인베스트</p>
+          <div className="rounded-[28px] border border-white/12 bg-white/95 p-4 shadow-[0_18px_50px_rgba(7,17,31,0.14)]">
+            <Image
+              src="/changse-invest-logo.svg"
+              alt="창세인베스트 로고"
+              width={220}
+              height={220}
+              className="h-auto w-[180px]"
+              priority
+            />
+          </div>
+          <p className="mt-5 text-xs font-semibold tracking-[0.24em] text-white/55">CHANGSE INVEST</p>
           <h1 className="mt-3 font-[family:var(--font-display)] text-3xl leading-tight">
             창세인베스트 인트라 시스템
           </h1>
           <p className="mt-4 text-sm leading-6 text-white/72">
-            비공개 시장 리서치 메모, 전망 기록, 후속 점검을 한 화면에서 운영하는 개인 연구
-            대시보드입니다.
+            경제 뉴스, 시장 해석, 투자 아이디어와 팔로업 결과를 한 화면에서 운영하는 프라이빗
+            리서치 대시보드입니다.
           </p>
         </div>
 
@@ -108,8 +119,8 @@ export function AppShell({
             ))}
           </div>
           <div className="mt-4 rounded-2xl border border-[rgba(200,157,97,0.25)] bg-[rgba(200,157,97,0.08)] p-4 text-sm leading-6 text-white/78">
-            현재 앱은 서버에서 권한을 확인한 뒤에만 리서치 데이터를 불러오는 private MVP입니다.
-            실제 CRUD는 다음 단계에서 서버 trusted write 경로로 연결합니다.
+            현재 앱은 서버 권한 확인 후 리서치 데이터를 불러오는 private MVP입니다. 입력과 수정은
+            trusted write 경로를 통해 안전하게 처리됩니다.
           </div>
           <div className="mt-4 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-white/74">
             <div className="flex items-center gap-2 font-semibold text-white/88">
@@ -125,13 +136,25 @@ export function AppShell({
 
       <div className="flex min-h-screen flex-1 flex-col pb-[calc(6.75rem+env(safe-area-inset-bottom))] lg:pb-0">
         <header className="mb-4 flex items-center justify-between rounded-[24px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.65)] px-4 py-3 shadow-[0_18px_45px_rgba(16,29,46,0.05)] backdrop-blur-sm lg:hidden">
-          <div>
-            <p className="text-[11px] font-semibold tracking-[0.12em] text-[var(--text-faint)]">
-              창세인베스트
-            </p>
-            <p className="font-[family:var(--font-display)] text-lg leading-tight text-[var(--text-strong)]">
-              창세인베스트 인트라 시스템
-            </p>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="rounded-2xl bg-white px-2 py-1.5 shadow-[0_10px_24px_rgba(16,29,46,0.08)]">
+              <Image
+                src="/changse-invest-logo.svg"
+                alt="창세인베스트 로고"
+                width={84}
+                height={84}
+                className="h-auto w-14"
+                priority
+              />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold tracking-[0.12em] text-[var(--text-faint)]">
+                CHANGSE INVEST
+              </p>
+              <p className="font-[family:var(--font-display)] text-lg leading-tight text-[var(--text-strong)]">
+                창세인베스트 인트라 시스템
+              </p>
+            </div>
           </div>
           <form action="/auth/sign-out" method="post">
             <button className="rounded-full bg-[rgba(23,42,70,0.08)] px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-[var(--text-muted)]">

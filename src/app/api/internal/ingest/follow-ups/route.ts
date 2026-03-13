@@ -1,28 +1,20 @@
 import { NextResponse } from "next/server";
 
 import { assertInternalAssistantRequest } from "@/lib/auth/internal";
-import { fetchResearchDataset } from "@/lib/supabase/research";
-import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import {
+  formatZodError,
+  internalFollowUpIngestSchema,
+} from "@/lib/server/assistant-ingest";
 import {
   buildFollowUpCopy,
   ensureMutationSuccess,
   resolveEntityId,
   resolveResearchOwnerId,
-  type FollowUpMutationInput,
 } from "@/lib/server/private-admin";
+import { fetchResearchDataset } from "@/lib/supabase/research";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
-function isFollowUpPayload(
-  value: Partial<FollowUpMutationInput> | null,
-): value is FollowUpMutationInput {
-  return Boolean(
-    value &&
-      typeof value.newsItemId === "string" &&
-      typeof value.status === "string" &&
-      typeof value.resultNote === "string",
-  );
-}
 
 export async function POST(request: Request) {
   try {
@@ -34,12 +26,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = (await request.json().catch(() => null)) as Partial<FollowUpMutationInput> | null;
-
-  if (!isFollowUpPayload(body)) {
-    return NextResponse.json({ error: "Invalid follow-up ingest payload." }, { status: 400 });
+  const rawBody = await request.json().catch(() => null);
+  const parsed = internalFollowUpIngestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
   }
 
+  const body = parsed.data;
   const client = createServiceRoleSupabaseClient();
   const ownerId = await resolveResearchOwnerId(client, "assistant-system");
   const resolvedNewsId = await resolveEntityId(client, "news_items", ownerId, body.newsItemId);
