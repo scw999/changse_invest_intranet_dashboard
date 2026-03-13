@@ -10,6 +10,7 @@ import {
   getDisplayTheme,
 } from "@/lib/content-kr";
 import {
+  ContentTypeBadge,
   DirectionBadge,
   FollowUpBadge,
   ImportanceBadge,
@@ -18,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { SectionCard } from "@/components/ui/section-card";
 import {
   assetClassLabels,
+  contentTypeLabels,
   directionalLabels,
   followUpLabels,
   importanceLabels,
@@ -27,12 +29,14 @@ import {
 import { useResearchStore } from "@/lib/store/research-store";
 import {
   ASSET_CLASSES,
+  CONTENT_TYPES,
   DIRECTIONAL_VIEWS,
   FOLLOW_UP_STATUSES,
   IMPORTANCE_LEVELS,
   REGIONS,
   SCAN_SLOTS,
   THEME_CATEGORIES,
+  type ContentType,
   type FollowUpRecord,
   type NewsItem,
   type ResearchDataset,
@@ -40,6 +44,7 @@ import {
 } from "@/types/research";
 
 type NewsFormState = {
+  contentType: ContentType;
   title: string;
   summary: string;
   sourceName: string;
@@ -56,6 +61,12 @@ type NewsFormState = {
   followUpStatus: (typeof FOLLOW_UP_STATUSES)[number];
   followUpNote: string;
   importance: (typeof IMPORTANCE_LEVELS)[number];
+  monitoringTargetTickers: string;
+  monitoringNote: string;
+  monitoringReferencePrice: string;
+  monitoringCurrentSnapshot: string;
+  monitoringTriggerCondition: string;
+  monitoringNextCheckNote: string;
 };
 
 type ThemeFormState = {
@@ -76,6 +87,7 @@ const defaultThemeForm: ThemeFormState = {
 
 function getDefaultNewsForm(): NewsFormState {
   return {
+    contentType: "news",
     title: "",
     summary: "",
     sourceName: "",
@@ -92,6 +104,12 @@ function getDefaultNewsForm(): NewsFormState {
     followUpStatus: "Pending",
     followUpNote: "",
     importance: "Medium",
+    monitoringTargetTickers: "",
+    monitoringNote: "",
+    monitoringReferencePrice: "",
+    monitoringCurrentSnapshot: "",
+    monitoringTriggerCondition: "",
+    monitoringNextCheckNote: "",
   };
 }
 
@@ -99,6 +117,7 @@ function mapNewsItemToForm(item: NewsItem): NewsFormState {
   const displayItem = getDisplayNewsItem(item);
 
   return {
+    contentType: item.contentType ?? "news",
     title: displayItem.title,
     summary: displayItem.summary,
     sourceName: displayItem.sourceName,
@@ -115,6 +134,12 @@ function mapNewsItemToForm(item: NewsItem): NewsFormState {
     followUpStatus: displayItem.followUpStatus,
     followUpNote: displayItem.followUpNote,
     importance: displayItem.importance,
+    monitoringTargetTickers: item.monitoring?.targetTickers?.join(", ") ?? "",
+    monitoringNote: item.monitoring?.note ?? "",
+    monitoringReferencePrice: item.monitoring?.referencePrice ?? "",
+    monitoringCurrentSnapshot: item.monitoring?.currentSnapshot ?? "",
+    monitoringTriggerCondition: item.monitoring?.triggerCondition ?? "",
+    monitoringNextCheckNote: item.monitoring?.nextCheckNote ?? "",
   };
 }
 
@@ -229,7 +254,24 @@ export function AdminPage() {
   const handleNewsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const monitoring = {
+      targetTickers: newsForm.monitoringTargetTickers
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+      note: newsForm.monitoringNote.trim(),
+      referencePrice: newsForm.monitoringReferencePrice.trim(),
+      currentSnapshot: newsForm.monitoringCurrentSnapshot.trim(),
+      triggerCondition: newsForm.monitoringTriggerCondition.trim(),
+      nextCheckNote: newsForm.monitoringNextCheckNote.trim(),
+    };
+
+    const hasMonitoring = Object.values(monitoring).some((value) =>
+      Array.isArray(value) ? value.length > 0 : Boolean(value),
+    );
+
     const payload = {
+      contentType: newsForm.contentType,
       title: newsForm.title.trim(),
       summary: newsForm.summary.trim(),
       sourceName: newsForm.sourceName.trim(),
@@ -246,6 +288,7 @@ export function AdminPage() {
       followUpStatus: newsForm.followUpStatus,
       followUpNote: newsForm.followUpNote.trim(),
       importance: newsForm.importance,
+      monitoring: hasMonitoring ? monitoring : undefined,
     };
 
     await runMutation(
@@ -318,6 +361,24 @@ export function AdminPage() {
         >
           <form className="space-y-4" onSubmit={(event) => void handleNewsSubmit(event)}>
             <div className="grid gap-4 md:grid-cols-2">
+              <Field label="콘텐츠 타입">
+                <select
+                  value={newsForm.contentType}
+                  onChange={(event) =>
+                    setNewsForm({
+                      ...newsForm,
+                      contentType: event.target.value as NewsFormState["contentType"],
+                    })
+                  }
+                  className="field"
+                >
+                  {CONTENT_TYPES.map((entry) => (
+                    <option key={entry} value={entry}>
+                      {contentTypeLabels[entry]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
               <Field label="제목">
                 <input
                   required
@@ -476,6 +537,66 @@ export function AdminPage() {
                 className="field min-h-[100px]"
               />
             </Field>
+
+            {newsForm.contentType === "monitoring" ? (
+              <div className="grid gap-4 rounded-[24px] border border-[var(--border-soft)] bg-[rgba(229,239,236,0.45)] p-4 md:grid-cols-2">
+                <Field label="대상 티커">
+                  <input
+                    value={newsForm.monitoringTargetTickers}
+                    onChange={(event) =>
+                      setNewsForm({ ...newsForm, monitoringTargetTickers: event.target.value })
+                    }
+                    placeholder="NVDA, JEPQ"
+                    className="field"
+                  />
+                </Field>
+                <Field label="기준 가격">
+                  <input
+                    value={newsForm.monitoringReferencePrice}
+                    onChange={(event) =>
+                      setNewsForm({ ...newsForm, monitoringReferencePrice: event.target.value })
+                    }
+                    className="field"
+                  />
+                </Field>
+                <Field label="메모">
+                  <textarea
+                    value={newsForm.monitoringNote}
+                    onChange={(event) =>
+                      setNewsForm({ ...newsForm, monitoringNote: event.target.value })
+                    }
+                    className="field min-h-[100px]"
+                  />
+                </Field>
+                <Field label="현재 스냅샷">
+                  <textarea
+                    value={newsForm.monitoringCurrentSnapshot}
+                    onChange={(event) =>
+                      setNewsForm({ ...newsForm, monitoringCurrentSnapshot: event.target.value })
+                    }
+                    className="field min-h-[100px]"
+                  />
+                </Field>
+                <Field label="트리거 조건">
+                  <textarea
+                    value={newsForm.monitoringTriggerCondition}
+                    onChange={(event) =>
+                      setNewsForm({ ...newsForm, monitoringTriggerCondition: event.target.value })
+                    }
+                    className="field min-h-[100px]"
+                  />
+                </Field>
+                <Field label="다음 체크 메모">
+                  <textarea
+                    value={newsForm.monitoringNextCheckNote}
+                    onChange={(event) =>
+                      setNewsForm({ ...newsForm, monitoringNextCheckNote: event.target.value })
+                    }
+                    className="field min-h-[100px]"
+                  />
+                </Field>
+              </div>
+            ) : null}
 
             <TagSelector
               label="영향 자산군"
@@ -679,6 +800,7 @@ export function AdminPage() {
               className="rounded-[24px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.82)] p-5"
             >
               <div className="flex flex-wrap items-center gap-2">
+                <ContentTypeBadge value={item.contentType ?? "news"} />
                 <ImportanceBadge value={item.importance} />
                 <DirectionBadge value={item.directionalView} />
                 <FollowUpBadge value={item.followUpStatus} />

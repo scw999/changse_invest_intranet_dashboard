@@ -8,8 +8,10 @@ import { NewsCard } from "@/components/research/news-card";
 import { PortfolioCard } from "@/components/research/portfolio-card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { RichText } from "@/components/ui/rich-text";
 import { SectionCard } from "@/components/ui/section-card";
 import { getDisplayNewsItem, getDisplayTheme, getDisplayTicker } from "@/lib/content-kr";
+import { buildArchiveHref } from "@/lib/navigation";
 import { assetClassLabels, regionLabels } from "@/lib/localize";
 import { groupById } from "@/lib/selectors";
 import { useResearchStore } from "@/lib/store/research-store";
@@ -24,7 +26,7 @@ export function TickerDetailPage({ symbol }: { symbol: string }) {
     return (
       <EmptyState
         title="티커를 찾을 수 없습니다"
-        description="현재 시드 데이터에 이 심볼과 연결된 티커가 없습니다."
+        description="현재 데이터셋에 이 심볼과 연결된 티커가 없습니다."
       />
     );
   }
@@ -41,21 +43,25 @@ export function TickerDetailPage({ symbol }: { symbol: string }) {
       <PageIntro
         eyebrow="티커 상세"
         title={`${displayTicker.symbol} · ${displayTicker.name}`}
-        description={displayTicker.note}
-        meta={`연결된 뉴스 ${relatedNews.length}건`}
+        description="티커 노트는 상세 페이지에서 article처럼 읽히고, 관련 뉴스는 archive 흐름 그대로 이어집니다."
+        meta={`연결 뉴스 ${relatedNews.length}건`}
       >
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">{displayTicker.exchange}</Badge>
           <Badge variant="outline">{regionLabels[displayTicker.region]}</Badge>
           <Badge>{assetClassLabels[displayTicker.assetClass]}</Badge>
           <Link
-            href="/tickers"
+            href={buildArchiveHref({ ticker: displayTicker.symbol })}
             className="inline-flex items-center rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)]"
           >
-            티커 목록으로
+            이 티커 뉴스만 보기
           </Link>
         </div>
       </PageIntro>
+
+      <SectionCard title="티커 노트" description="markdown 문법이 없어도 문단과 줄바꿈을 유지합니다.">
+        <RichText content={displayTicker.note} />
+      </SectionCard>
 
       {portfolioEntry ? (
         <SectionCard
@@ -66,7 +72,7 @@ export function TickerDetailPage({ symbol }: { symbol: string }) {
         </SectionCard>
       ) : null}
 
-      <SectionCard title="티커 아카이브" description="이 티커에 연결된 모든 뉴스 기록입니다.">
+      <SectionCard title="티커 아카이브" description="이 티커와 연결된 모든 뉴스 기록입니다.">
         <div className="space-y-5">
           {relatedNews.length ? (
             relatedNews.map((item) => (
@@ -84,16 +90,13 @@ export function TickerDetailPage({ symbol }: { symbol: string }) {
           ) : (
             <EmptyState
               title="연결된 뉴스가 없습니다"
-              description="이 티커는 유니버스에 존재하지만 아직 시드 뉴스와 직접 연결되지는 않았습니다."
+              description="이 티커는 아직 seed 뉴스와 직접 연결되지 않았습니다."
             />
           )}
         </div>
       </SectionCard>
 
-      <SectionCard
-        title="결과 이력"
-        description="이 티커에 대한 과거 해석이 실제로 어떻게 전개됐는지 모아둔 영역입니다."
-      >
+      <SectionCard title="결과 이력" description="관련 뉴스가 실제로 어떻게 전개됐는지 모아 둔 영역입니다.">
         <div className="space-y-5">
           {relatedFollowUps.length ? (
             relatedFollowUps.map((record) => {
@@ -117,7 +120,7 @@ export function TickerDetailPage({ symbol }: { symbol: string }) {
           ) : (
             <EmptyState
               title="아직 팔로업 결과가 없습니다"
-              description="뉴스 운영 화면에서 결과 상태와 메모를 업데이트하면 이력이 쌓입니다."
+              description="follow-up 상태와 메모가 누적되면 여기서 시간순으로 확인할 수 있습니다."
             />
           )}
         </div>

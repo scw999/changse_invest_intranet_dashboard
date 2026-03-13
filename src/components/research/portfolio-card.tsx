@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { RichText } from "@/components/ui/rich-text";
 import { getDisplayPortfolioItem } from "@/lib/content-kr";
 import {
   portfolioAssetTypeLabels,
@@ -21,7 +22,7 @@ export function PortfolioCard({ item }: PortfolioCardProps) {
         <Badge variant="outline">{portfolioAssetTypeLabels[displayItem.assetType]}</Badge>
         <Badge variant="outline">{regionLabels[displayItem.region]}</Badge>
         {displayItem.isHolding ? <Badge variant="bullish">보유</Badge> : null}
-        {displayItem.isWatchlist ? <Badge variant="high">관심</Badge> : null}
+        {displayItem.isWatchlist ? <Badge variant="high">관심종목</Badge> : null}
         <Badge>{priorityLabels[displayItem.priority]}</Badge>
       </div>
       <h3 className="mt-4 font-[family:var(--font-display)] text-[1.6rem] leading-tight text-[var(--text-strong)] sm:text-3xl">
@@ -35,7 +36,11 @@ export function PortfolioCard({ item }: PortfolioCardProps) {
         />
       </div>
       {displayItem.memo ? (
-        <p className="mt-4 text-sm leading-7 text-[var(--text-muted)]">{displayItem.memo}</p>
+        <RichText
+          content={displayItem.memo}
+          compact
+          className="mt-4 text-sm text-[var(--text-muted)]"
+        />
       ) : null}
     </article>
   );

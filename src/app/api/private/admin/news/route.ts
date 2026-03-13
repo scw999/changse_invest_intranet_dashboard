@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requirePrivateRouteRequest } from "@/lib/auth/route";
+import { requireAdminRouteRequest } from "@/lib/auth/route";
 import { getViewer } from "@/lib/auth/session";
 import { fetchResearchDataset } from "@/lib/supabase/research";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
@@ -131,6 +131,7 @@ async function syncFollowUp(
 
 function toNewsRow(payload: NewsMutationInput) {
   return {
+    content_type: payload.contentType ?? "news",
     title: payload.title.trim(),
     summary: payload.summary.trim(),
     source_name: payload.sourceName.trim(),
@@ -145,6 +146,7 @@ function toNewsRow(payload: NewsMutationInput) {
     follow_up_status: payload.followUpStatus,
     follow_up_note: payload.followUpNote.trim(),
     importance: payload.importance,
+    content_meta: payload.monitoring ? { monitoring: payload.monitoring } : {},
   };
 }
 
@@ -158,7 +160,7 @@ async function respondWithDataset(client: ReturnType<typeof createServiceRoleSup
 }
 
 export async function POST(request: Request) {
-  const authResponse = await requirePrivateRouteRequest(request);
+  const authResponse = await requireAdminRouteRequest(request);
   if (authResponse) {
     return authResponse;
   }
@@ -198,7 +200,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const authResponse = await requirePrivateRouteRequest(request);
+  const authResponse = await requireAdminRouteRequest(request);
   if (authResponse) {
     return authResponse;
   }
@@ -234,7 +236,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const authResponse = await requirePrivateRouteRequest(request);
+  const authResponse = await requireAdminRouteRequest(request);
   if (authResponse) {
     return authResponse;
   }

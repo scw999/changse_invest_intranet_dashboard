@@ -1,11 +1,13 @@
 import { Badge } from "@/components/ui/badge";
 import {
+  contentTypeLabels,
   directionalLabels,
   followUpLabels,
   importanceLabels,
   regionLabels,
 } from "@/lib/localize";
 import type {
+  ContentType,
   DirectionalView,
   FollowUpStatus,
   ImportanceLevel,
@@ -52,4 +54,15 @@ export function SlotBadge({ value }: { value: ScanSlot }) {
 
 export function RegionBadge({ value }: { value: Region }) {
   return <Badge>{regionLabels[value]}</Badge>;
+}
+
+export function ContentTypeBadge({ value }: { value: ContentType }) {
+  const variantMap = {
+    news: "outline",
+    analysis: "high",
+    opinion: "mixed",
+    monitoring: "pending",
+  } as const;
+
+  return <Badge variant={variantMap[value]}>{contentTypeLabels[value]}</Badge>;
 }

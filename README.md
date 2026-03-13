@@ -226,3 +226,192 @@ ASSISTANT_INGEST_TOKEN
 
 - 현재 브라우저 로컬 저장은 제거되어, 민감한 리서치 데이터가 localStorage에 남지 않습니다.
 - mock 데이터 fallback은 개발 편의용이며, private API가 정상 동작하면 Supabase 실데이터가 우선 사용됩니다.
+## 2026-03 usability upgrade
+
+- Dashboard stat cards now drill down into filtered archive or follow-up views.
+- Slot monitor cards now open `/archive` with URL-driven filters such as `date=today` and `slot=09`.
+- News cards now link to `/archive/[id]` detail pages.
+- Theme dashboard cards can route into filtered archive views.
+- Archive and follow-up pages now read and update filters from the URL query string.
+
+### Markdown rendering
+
+Detail content and long-form note areas now use safe markdown rendering with:
+
+- headings
+- bold text
+- bullet and numbered lists
+- tables
+- blockquotes
+- preserved line breaks for plain text
+
+Implemented with:
+
+- `react-markdown`
+- `remark-gfm`
+- `remark-breaks`
+
+Unsafe raw HTML is not enabled.
+
+### Example drill-down routes
+
+- `/archive?type=news&date=today`
+- `/archive?type=news&date=today&slot=09`
+- `/archive?priority=Critical`
+- `/archive?linked=portfolio`
+- `/archive?theme=ai-supply-chain`
+- `/archive?ticker=NVDA`
+- `/follow-up?status=Pending`
+
+## 2026-03 content type upgrade
+
+Research records are no longer treated as only `news`. The archive and ingest flow now support:
+
+- `news`
+- `analysis`
+- `opinion`
+- `monitoring`
+
+### Schema
+
+`news_items` now includes:
+
+- `content_type text not null default 'news'`
+- `content_meta jsonb not null default '{}'::jsonb`
+
+Monitoring-specific notes can live under:
+
+```json
+{
+  "monitoring": {
+    "targetTickers": ["NVDA"],
+    "note": "Covered-call ETF comparison watch",
+    "referencePrice": "129.50",
+    "currentSnapshot": "Dividend trend stable",
+    "triggerCondition": "Break below 124",
+    "nextCheckNote": "Review after next monthly distribution"
+  }
+}
+```
+
+### Migration
+
+Run this if your Supabase project already existed before the content type update:
+
+1. [supabase/content-types-migration.sql](./supabase/content-types-migration.sql)
+
+Existing rows are backfilled to `news`, so old items continue to work without extra edits.
+
+### Internal assistant ingest
+
+`/api/internal/ingest/news` now accepts optional `contentType`.
+If omitted, the server defaults it to `news`.
+
+Example payloads:
+
+```json
+{
+  "operation": "upsert",
+  "contentType": "news",
+  "title": "NVDA earnings beat consensus",
+  "summary": "Datacenter guidance came in ahead of market expectations.",
+  "sourceName": "Bloomberg",
+  "sourceUrl": "https://example.com",
+  "publishedAt": "2026-03-14T09:00:00+09:00",
+  "scanSlot": "09",
+  "region": "US",
+  "affectedAssetClasses": ["Equities", "ETF"],
+  "relatedThemeIds": ["theme-ai-supply"],
+  "relatedTickerIds": ["ticker-nvda"],
+  "marketInterpretation": "Short-term positive for AI leadership.",
+  "directionalView": "Bullish",
+  "actionIdea": "Hold existing exposure and watch follow-through.",
+  "followUpStatus": "Pending",
+  "followUpNote": "Check market breadth after the open.",
+  "importance": "High"
+}
+```
+
+```json
+{
+  "operation": "upsert",
+  "contentType": "analysis",
+  "title": "JEPQ vs STRC allocation memo",
+  "summary": "Comparison of yield stability, downside behavior, and fit in a 5% sleeve.",
+  "sourceName": "Changse Bot",
+  "sourceUrl": "https://changse.local/analysis/jepq-strc",
+  "publishedAt": "2026-03-14T13:00:00+09:00",
+  "scanSlot": "13",
+  "region": "US",
+  "affectedAssetClasses": ["ETF"],
+  "relatedThemeIds": ["theme-rates-path"],
+  "relatedTickerIds": ["ticker-jepq", "ticker-strc"],
+  "marketInterpretation": "Income products should be compared across distribution quality and drawdown behavior.",
+  "directionalView": "Neutral",
+  "actionIdea": "Use as a comparison note, not a same-day trade trigger.",
+  "followUpStatus": "Pending",
+  "followUpNote": "Update after the next monthly distribution print.",
+  "importance": "Medium"
+}
+```
+
+```json
+{
+  "operation": "upsert",
+  "contentType": "opinion",
+  "title": "5% income sleeve opinion",
+  "summary": "Prefer JEPQ 3% plus TIGER US dividend ETF 2% over a full 5% single ETF concentration.",
+  "sourceName": "Changse Bot",
+  "sourceUrl": "https://changse.local/opinion/income-sleeve",
+  "publishedAt": "2026-03-14T18:00:00+09:00",
+  "scanSlot": "18",
+  "region": "GLOBAL",
+  "affectedAssetClasses": ["ETF"],
+  "relatedThemeIds": ["theme-safe-havens"],
+  "relatedTickerIds": ["ticker-jepq"],
+  "marketInterpretation": "Blending products can reduce single-instrument regret risk.",
+  "directionalView": "Mixed",
+  "actionIdea": "Treat this as portfolio opinion, not factual reporting.",
+  "followUpStatus": "Pending",
+  "followUpNote": "Revisit after monthly income and price drawdown comparison.",
+  "importance": "Medium"
+}
+```
+
+```json
+{
+  "operation": "upsert",
+  "contentType": "monitoring",
+  "title": "NVDA price and dividend watch",
+  "summary": "Track drawdown level and next review trigger for AI exposure.",
+  "sourceName": "Changse Bot",
+  "sourceUrl": "https://changse.local/monitoring/nvda-watch",
+  "publishedAt": "2026-03-14T22:00:00+09:00",
+  "scanSlot": "22",
+  "region": "US",
+  "affectedAssetClasses": ["Equities"],
+  "relatedThemeIds": ["theme-ai-supply"],
+  "relatedTickerIds": ["ticker-nvda"],
+  "marketInterpretation": "This is a watch item rather than a factual news report.",
+  "directionalView": "Neutral",
+  "actionIdea": "Do not act unless the trigger condition is met.",
+  "followUpStatus": "Pending",
+  "followUpNote": "Check again after the next major move.",
+  "importance": "High",
+  "monitoring": {
+    "targetTickers": ["NVDA"],
+    "note": "Watch for drawdown and sentiment reset.",
+    "referencePrice": "129.50",
+    "currentSnapshot": "Price holding above short-term support.",
+    "triggerCondition": "Break below 124 or renewed volume spike",
+    "nextCheckNote": "Review after next close"
+  }
+}
+```
+
+### UI behavior
+
+- Dashboard now shows grouped latest sections for `news`, `analysis`, `opinion`, and `monitoring`
+- Archive cards and detail pages now display a visible content type badge
+- `/archive?type=news|analysis|opinion|monitoring` is supported
+- Monitoring detail pages show extra watch-specific fields when present

@@ -20,9 +20,9 @@ export const metadata: Metadata = {
   description:
     "경제 뉴스, 시장 해석, 투자 아이디어, 팔로업 결과와 포트폴리오 연관성을 구조적으로 관리하는 개인 리서치 대시보드입니다.",
   icons: {
-    icon: "/icon.svg",
-    shortcut: "/icon.svg",
-    apple: "/icon.svg",
+    icon: "/favicon-source.png",
+    shortcut: "/favicon-source.png",
+    apple: "/favicon-source.png",
   },
 };
 

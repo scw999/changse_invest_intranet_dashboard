@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   ASSET_CLASSES,
+  CONTENT_TYPES,
   DIRECTIONAL_VIEWS,
   FOLLOW_UP_STATUSES,
   IMPORTANCE_LEVELS,
@@ -334,6 +335,10 @@ const importanceField = z.preprocess(
   (value) => normalizeEnumValue(value, importanceAliasMap, IMPORTANCE_LEVELS),
   z.enum(IMPORTANCE_LEVELS),
 );
+const contentTypeField = z.preprocess(
+  (value) => normalizeEnumValue(value, {}, CONTENT_TYPES),
+  z.enum(CONTENT_TYPES),
+);
 const priorityField = z.preprocess(
   (value) => normalizeEnumValue(value, importanceAliasMap, PRIORITY_LEVELS),
   z.enum(PRIORITY_LEVELS),
@@ -355,6 +360,7 @@ export const internalNewsIngestSchema = z.discriminatedUnion("operation", [
   z.object({
     operation: z.literal("upsert"),
     id: commonIdField.optional(),
+    contentType: contentTypeField.default("news"),
     title: textField,
     summary: textField,
     sourceName: textField,
@@ -371,6 +377,16 @@ export const internalNewsIngestSchema = z.discriminatedUnion("operation", [
     followUpStatus: followUpStatusField,
     followUpNote: z.preprocess(normalizeTrimmedText, z.string()),
     importance: importanceField,
+    monitoring: z
+      .object({
+        targetTickers: z.preprocess(normalizeStringArray, z.array(z.string()).optional()),
+        note: optionalTextField,
+        referencePrice: optionalTextField,
+        currentSnapshot: optionalTextField,
+        triggerCondition: optionalTextField,
+        nextCheckNote: optionalTextField,
+      })
+      .optional(),
   }),
   z.object({
     operation: z.literal("delete"),

@@ -14,9 +14,14 @@ export async function createServerSupabaseClient() {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options);
-        });
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Server Components can read cookies during render, but cannot mutate them.
+          // Route Handlers and auth callback flows still handle the real session writes.
+        }
       },
     },
   });

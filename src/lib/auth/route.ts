@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/auth/session";
 
-export async function requirePrivateRouteRequest(request: Request) {
+export async function requireAdminRouteRequest(request: Request) {
   const viewer = await getViewer();
   const requestUrl = new URL(request.url);
 

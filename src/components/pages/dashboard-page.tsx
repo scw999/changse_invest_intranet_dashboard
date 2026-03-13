@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { BellRing, Layers3, Sparkles, Target, TrendingUp } from "lucide-react";
 
 import { PageIntro } from "@/components/layout/page-intro";
@@ -11,8 +12,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
 import { getDisplayNewsItem, getDisplayTheme } from "@/lib/content-kr";
-import { followUpLabels, importanceLabels } from "@/lib/localize";
+import { buildArchiveHref, buildFollowUpHref } from "@/lib/navigation";
+import { contentTypeLabels, followUpLabels } from "@/lib/localize";
 import {
+  getContentTypeItems,
   getFollowUpSummary,
   getLatestNewsDate,
   getPersonalizedNews,
@@ -23,6 +26,7 @@ import {
 } from "@/lib/selectors";
 import { useResearchStore } from "@/lib/store/research-store";
 import { formatLongDate } from "@/lib/utils";
+import { CONTENT_TYPES } from "@/types/research";
 
 export function DashboardPage() {
   const dataset = useResearchStore((state) => state);
@@ -58,17 +62,21 @@ export function DashboardPage() {
     )
     .slice(0, 3);
   const followUpSummary = getFollowUpSummary(dataset.followUps);
+  const latestByType = CONTENT_TYPES.map((type) => ({
+    type,
+    items: getContentTypeItems(dataset.newsItems, type).slice(0, 3),
+  }));
 
   return (
     <div className="space-y-6">
       <PageIntro
-        eyebrow="대시보드 / 투데이"
-        title="오늘의 리서치 운영 화면"
-        description="최신 시장 변화와 해석 메모를 빠르게 훑고, 현재 보유 자산과 연결되는 뉴스를 우선적으로 확인할 수 있도록 구성했습니다."
+        eyebrow="Dashboard / Today"
+        title="오늘의 리서치 흐름"
+        description="정적인 숫자판이 아니라, 바로 drill-down 해서 뉴스와 분석, 의견, 모니터링 기록을 다시 읽을 수 있는 private dashboard입니다."
         meta={latestDate ? formatLongDate(latestDate) : "데이터 없음"}
       >
         <div className="flex flex-wrap gap-2">
-          <Badge variant="outline">아시아/서울</Badge>
+          <Badge variant="outline">드릴다운 대시보드</Badge>
           {dataset.preferences.favoriteSlots.map((slot) => (
             <Badge key={slot}>{`${slot}:00 슬롯`}</Badge>
           ))}
@@ -79,39 +87,93 @@ export function DashboardPage() {
         <StatCard
           label="오늘 뉴스"
           value={String(todayNews.length)}
-          description="가장 최근 일일 스캔 기준으로 확인 가능한 뉴스 건수입니다."
+          description="오늘 들어온 팩트성 뉴스와 업데이트를 빠르게 확인합니다."
           accent="linear-gradient(90deg, #c89d61, #e4c291)"
+          href={buildArchiveHref({ type: "news", date: "today" })}
         />
         <StatCard
-          label="핵심"
+          label="중요도 높은 항목"
           value={String(todayNews.filter((item) => item.importance === "Critical").length)}
-          description="다음 스캔 전 다시 확인해야 할 최우선 항목 수입니다."
+          description="오늘 기록 중 Critical 레벨만 바로 모아 봅니다."
           accent="linear-gradient(90deg, #8d2d2d, #c88b72)"
+          href={buildArchiveHref({ date: "today", priority: "Critical" })}
         />
         <StatCard
           label="팔로업 대기"
           value={String(followUpSummary.pending)}
-          description="결과 검증이 아직 끝나지 않은 해석 건수입니다."
+          description="재확인해야 하는 follow-up 메모를 바로 엽니다."
           accent="linear-gradient(90deg, #355c7d, #6d8fa3)"
+          href={buildFollowUpHref({ status: "Pending" })}
         />
         <StatCard
           label="보유 연관"
           value={String(personalizedNews.length)}
-          description="보유 종목, 관심 종목, 관심 테마와 연결된 오늘 뉴스 수입니다."
+          description="보유 및 관심 종목과 연결된 기록만 다시 모아 봅니다."
           accent="linear-gradient(90deg, #2e6a64, #7ab1a6)"
+          href={buildArchiveHref({ linked: "portfolio", date: "today" })}
         />
       </section>
+
+      <SectionCard
+        title="콘텐츠 타입별 흐름"
+        description="뉴스, 분석, 투자 의견, 모니터링을 분리해서 최신 기록을 바로 읽고 해당 타입 아카이브로 이동할 수 있습니다."
+      >
+        <div className="grid gap-4 xl:grid-cols-4">
+          {latestByType.map(({ type, items }) => (
+            <div
+              key={type}
+              className="rounded-[24px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.78)] p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Badge variant="outline">{contentTypeLabels[type]}</Badge>
+                  <p className="mt-3 font-[family:var(--font-display)] text-2xl text-[var(--text-strong)]">
+                    {items.length}건
+                  </p>
+                </div>
+                <Link
+                  href={buildArchiveHref({ type })}
+                  className="inline-flex items-center rounded-full border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)]"
+                >
+                  전체 보기
+                </Link>
+              </div>
+              <div className="mt-4 space-y-3">
+                {items.length ? (
+                  items.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={`/archive/${item.id}`}
+                      className="block rounded-[18px] border border-[var(--border-soft)] bg-[rgba(243,239,231,0.72)] px-4 py-3 transition hover:border-[var(--border-strong)] hover:bg-[rgba(243,239,231,0.9)]"
+                    >
+                      <p className="text-sm font-semibold text-[var(--text-strong)]">
+                        {getDisplayNewsItem(item).title}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        {getDisplayNewsItem(item).sourceName}
+                      </p>
+                    </Link>
+                  ))
+                ) : (
+                  <p className="text-sm text-[var(--text-muted)]">아직 기록이 없습니다.</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
 
       <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
         <SectionCard
           title="슬롯 모니터"
-          description="09시, 13시, 18시, 22시 네 번의 체크포인트 기준으로 무엇이 추가됐고 무엇이 더 판단이 필요한지 빠르게 봅니다."
+          description="09, 13, 18, 22시 슬롯을 누르면 해당 시간대 아카이브 목록으로 이동합니다."
         >
           <div className="grid gap-4 md:grid-cols-2">
             {slotBuckets.map((bucket) => (
-              <div
+              <Link
                 key={bucket.slot}
-                className="rounded-[24px] border border-[var(--border-soft)] bg-[rgba(243,239,231,0.72)] p-4"
+                href={buildArchiveHref({ type: "news", date: "today", slot: bucket.slot })}
+                className="group rounded-[24px] border border-[var(--border-soft)] bg-[rgba(243,239,231,0.72)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[0_22px_50px_rgba(16,29,46,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(167,112,49,0.35)]"
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -147,25 +209,25 @@ export function DashboardPage() {
                           {displayItem.title}
                         </p>
                         <p className="mt-1 text-sm text-[var(--text-muted)]">
-                          {displayItem.sourceName} · {importanceLabels[displayItem.importance]}
+                          {displayItem.sourceName} · {item.importance}
                         </p>
                       </div>
                     );
                   })}
                   {bucket.items.length === 0 ? (
                     <p className="text-sm text-[var(--text-muted)]">
-                      아직 이 슬롯에 등록된 뉴스가 없습니다.
+                      아직 해당 슬롯 기록이 없습니다.
                     </p>
                   ) : null}
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </SectionCard>
 
         <SectionCard
           title="테마 흐름"
-          description="현재 리서치 북에서 가장 빠르게 쌓이는 테마를 먼저 보여줍니다."
+          description="테마 카드를 누르면 해당 테마 관련 아카이브 목록으로 이동합니다."
         >
           <div className="space-y-4">
             {themePulse.map((theme) => {
@@ -178,6 +240,7 @@ export function DashboardPage() {
                   newsCount={coverage.newsCount}
                   pendingCount={coverage.pendingCount}
                   followUpCount={coverage.followUpCount}
+                  href={buildArchiveHref({ theme: theme.slug })}
                 />
               );
             })}
@@ -186,8 +249,8 @@ export function DashboardPage() {
       </div>
 
       <SectionCard
-        title="고확신 핵심 뉴스"
-        description="가장 최근 스캔에서 중요도가 높은 뉴스를 빠르게 읽고 바로 해석할 수 있게 정리했습니다."
+        title="오늘의 핵심 기록"
+        description="카드에서는 요약만 빠르게 보고, 제목을 누르면 구조화된 detail 화면으로 들어갑니다."
       >
         <div className="space-y-5">
           {todayNews.slice(0, 5).map((item) => (
@@ -207,8 +270,8 @@ export function DashboardPage() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <SectionCard
-          title="내 포트폴리오 연관 뉴스"
-          description="보유 종목, 관심 종목, 관심 테마를 기준으로 우선순위를 올린 개인화 영역입니다."
+          title="포트폴리오 연관 기록"
+          description="보유 종목, 관심 종목, 관심 테마와 연결된 기록을 우선순위 순으로 다시 보여줍니다."
         >
           <div className="space-y-5">
             {personalizedNews.length ? (
@@ -227,22 +290,25 @@ export function DashboardPage() {
               ))
             ) : (
               <EmptyState
-                title="아직 연관 뉴스가 없습니다"
-                description="보유 종목, 관심 종목, 관심 테마를 추가하면 관련 뉴스가 이 영역에 먼저 올라옵니다."
+                title="아직 관련 기록이 없습니다"
+                description="보유 종목이나 관심 테마를 추가하면 여기부터 우선 정렬됩니다."
               />
             )}
           </div>
         </SectionCard>
 
         <SectionCard
-          title="최근 팔로업 점검"
-          description="이전 해석이 실제로 어떻게 전개됐는지 기록해 두면 이 화면이 단순 뉴스 피드가 아니라 리서치 메모리로 바뀝니다."
+          title="최근 팔로업 결과"
+          description="후속 검증 기록을 카드로 보고, 상태 칩을 누르면 해당 상태 목록으로 이동합니다."
           action={
-            <div className="inline-flex items-center gap-2 rounded-full bg-[rgba(23,42,70,0.08)] px-4 py-2 text-sm font-semibold text-[var(--text-muted)]">
+            <Link
+              href={buildFollowUpHref({ status: "Correct" })}
+              className="inline-flex items-center gap-2 rounded-full bg-[rgba(23,42,70,0.08)] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.12)]"
+            >
               <Target className="h-4 w-4" />
               {followUpSummary.correct} {followUpLabels.Correct} / {followUpSummary.mixed}{" "}
               {followUpLabels.Mixed}
-            </div>
+            </Link>
           }
         >
           <div className="space-y-5">

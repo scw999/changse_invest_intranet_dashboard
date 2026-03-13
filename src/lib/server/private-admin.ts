@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
   AssetClass,
+  ContentType,
   DirectionalView,
   FollowUpStatus,
   ImportanceLevel,
@@ -21,6 +22,7 @@ type ThemeLookupRow = { id: string; name: string; slug: string };
 type TickerLookupRow = { id: string; symbol: string; name: string };
 
 export type NewsMutationInput = {
+  contentType?: ContentType;
   title: string;
   summary: string;
   sourceName: string;
@@ -37,6 +39,14 @@ export type NewsMutationInput = {
   followUpStatus: FollowUpStatus;
   followUpNote: string;
   importance: ImportanceLevel;
+  monitoring?: {
+    targetTickers?: string[];
+    note?: string;
+    referencePrice?: string;
+    currentSnapshot?: string;
+    triggerCondition?: string;
+    nextCheckNote?: string;
+  };
 };
 
 export type ThemeMutationInput = {

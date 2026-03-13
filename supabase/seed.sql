@@ -38,6 +38,7 @@ values
 insert into public.news_items (
   id,
   owner_id,
+  content_type,
   title,
   summary,
   source_name,
@@ -51,12 +52,14 @@ insert into public.news_items (
   action_idea,
   follow_up_status,
   follow_up_note,
-  importance
+  importance,
+  content_meta
 )
 values
   (
     '00000000-0000-0000-0000-000000000301',
     '11111111-1111-1111-1111-111111111111',
+    'news',
     'Korea fiscal support talk revives domestic beta into the morning scan',
     'Local brokers flagged renewed supplementary budget discussion as enough to rotate flows back into domestic cyclicals and broad Korea beta.',
     'Yonhap',
@@ -70,11 +73,13 @@ values
     'Lean into Korea beta on weakness rather than chase. Prefer liquid vehicles and banks over smaller cyclicals.',
     'Pending',
     'Need confirmation from budget headlines and foreign flow before upgrading conviction.',
-    'High'
+    'High',
+    '{}'::jsonb
   ),
   (
     '00000000-0000-0000-0000-000000000302',
     '11111111-1111-1111-1111-111111111111',
+    'news',
     'US core CPI cooldown eases duration pressure ahead of the New York open',
     'A softer-than-feared inflation read triggered a relief move in long duration while keeping growth leadership intact for now.',
     'Reuters',
@@ -88,11 +93,13 @@ values
     'Maintain tactical TLT watchlist bias and keep QQQ positions, but avoid assuming a straight-line rally.',
     'Pending',
     'Watch whether Fed speakers validate the market move within 24 hours.',
-    'Critical'
+    'Critical',
+    '{}'::jsonb
   ),
   (
     '00000000-0000-0000-0000-000000000305',
     '11111111-1111-1111-1111-111111111111',
+    'analysis',
     'Hyperscaler capex checks keep AI supply chain leadership intact',
     'Channel checks suggested no meaningful pause in AI infrastructure spend, reinforcing leadership for high-end chips and memory suppliers.',
     'The Information',
@@ -106,11 +113,13 @@ values
     'Stay long core AI winners, but rotate adds into supply-chain names where revisions can still surprise positively.',
     'Pending',
     'Need next round of supplier guidance to judge whether pricing power is still broadening.',
-    'Critical'
+    'Critical',
+    '{}'::jsonb
   ),
   (
     '00000000-0000-0000-0000-000000000307',
     '11111111-1111-1111-1111-111111111111',
+    'opinion',
     'Korea early export data surprises on semiconductors and memory pricing',
     'Preliminary shipment data pointed to stronger semiconductor exports, with memory pricing commentary helping high-beta chip names into the close.',
     'Maeil Business',
@@ -124,11 +133,13 @@ values
     'Favor SK Hynix on momentum and Samsung on catch-up quality. Use export data as confirmation rather than the first signal.',
     'Pending',
     'Need confirmation from spot memory pricing in the weekly check.',
-    'Critical'
+    'Critical',
+    '{}'::jsonb
   ),
   (
     '00000000-0000-0000-0000-000000000310',
     '11111111-1111-1111-1111-111111111111',
+    'news',
     'Europe defense orders broaden supplier read-through for Korea names',
     'Incremental order commentary in Europe strengthened the case for a longer defense upcycle reaching Korean aerospace suppliers.',
     'Financial Times',
@@ -142,11 +153,13 @@ values
     'Keep Hanwha Aerospace on the watchlist as a pullback buyer. Favor backlog visibility over valuation complaints.',
     'Pending',
     'Need contract timing clarity and margin assumptions to move from watchlist to active buy.',
-    'High'
+    'High',
+    '{}'::jsonb
   ),
   (
     '00000000-0000-0000-0000-000000000311',
     '11111111-1111-1111-1111-111111111111',
+    'monitoring',
     'Gold holds firm as real yields retreat from recent highs',
     'Bullion stayed resilient even as the dollar remained firm, with real-yield easing offsetting the FX headwind.',
     'MarketWatch',
@@ -160,11 +173,13 @@ values
     'Keep GLD in the watchlist hedge bucket, particularly if real yields continue to soften without a growth scare.',
     'Pending',
     'Confirm with a second session of follow-through before sizing defensively.',
-    'Medium'
+    'Medium',
+    '{"monitoring":{"targetTickers":["GLD","TLT"],"note":"Monitor hedge behavior versus real yields and equity breadth.","referencePrice":"GLD around recent breakout zone","currentSnapshot":"Gold held up despite dollar firmness.","triggerCondition":"If real yields keep easing while breadth narrows, raise hedge attention.","nextCheckNote":"Review next session close and real-yield move."}}'::jsonb
   ),
   (
     '00000000-0000-0000-0000-000000000312',
     '11111111-1111-1111-1111-111111111111',
+    'monitoring',
     'Renewed Treasury auction demand sparks a tactical rebound in duration',
     'Stronger-than-feared auction demand helped long-end Treasuries stabilize after a bruising selloff, reviving a tactical bounce setup.',
     'Reuters',
@@ -178,11 +193,13 @@ values
     'Use TLT for a short-horizon mean-reversion trade and keep expectations modest unless inflation cools too.',
     'Correct',
     'The next session held gains and validated the tactical bounce, but the move stalled once Fed speakers turned firmer.',
-    'High'
+    'High',
+    '{"monitoring":{"targetTickers":["TLT"],"note":"Track whether the tactical rebound turns into a durable duration trend.","referencePrice":"Auction rebound base","currentSnapshot":"First-day rebound held.","triggerCondition":"Fade if Fed speakers turn hawkish again.","nextCheckNote":"Check next CPI/Fed combination before resizing."}}'::jsonb
   ),
   (
     '00000000-0000-0000-0000-000000000316',
     '11111111-1111-1111-1111-111111111111',
+    'opinion',
     'Korea banks outperform on steeper-curve expectations into the weekly close',
     'Domestic banks outperformed after dealers started pricing a stickier nominal backdrop and better NIM support.',
     'Seoul Economic Daily',
@@ -196,7 +213,8 @@ values
     'Use banks as quality domestic beta rather than a pure rates trade. KB remains the cleanest liquid expression.',
     'Correct',
     'Banks kept relative strength while cyclicals rotated, supporting the idea of them as stabilizing domestic exposure.',
-    'Medium'
+    'Medium',
+    '{}'::jsonb
   );
 
 insert into public.news_item_themes (owner_id, news_item_id, theme_id)

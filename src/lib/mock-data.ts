@@ -813,3 +813,24 @@ export const mockResearchDataset: ResearchDataset = {
 export function cloneMockDataset() {
   return JSON.parse(JSON.stringify(mockResearchDataset)) as ResearchDataset;
 }
+
+export const emptyResearchDataset: ResearchDataset = {
+  themes: [],
+  tickers: [],
+  newsItems: [],
+  followUps: [],
+  portfolioItems: [],
+  preferences: {
+    id: "preferences-empty",
+    timezone: "Asia/Seoul",
+    preferredSort: "latest",
+    favoriteSlots: [],
+    defaultRegions: [],
+    interestThemeIds: [],
+    compactMode: false,
+  },
+};
+
+export function cloneEmptyDataset() {
+  return JSON.parse(JSON.stringify(emptyResearchDataset)) as ResearchDataset;
+}

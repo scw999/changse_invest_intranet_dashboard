@@ -1,12 +1,12 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { requirePrivateViewer } from "@/lib/auth/session";
+import { getViewerOrGuest } from "@/lib/auth/session";
 
 export default async function PrivateLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const viewer = await requirePrivateViewer();
+  const viewer = await getViewerOrGuest();
 
   return <AppShell viewer={viewer}>{children}</AppShell>;
 }

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { cn } from "@/lib/utils";
 
 type StatCardProps = {
@@ -6,6 +8,7 @@ type StatCardProps = {
   description: string;
   accent?: string;
   className?: string;
+  href?: string;
 };
 
 export function StatCard({
@@ -14,14 +17,18 @@ export function StatCard({
   description,
   accent,
   className,
+  href,
 }: StatCardProps) {
-  return (
-    <div
-      className={cn(
-        "rounded-[22px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.82)] p-4 shadow-[0_20px_45px_rgba(16,29,46,0.06)] md:rounded-[24px]",
-        className,
-      )}
-    >
+  const classes = cn(
+    "rounded-[22px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.82)] p-4 shadow-[0_20px_45px_rgba(16,29,46,0.06)] transition md:rounded-[24px]",
+    href
+      ? "group block hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[0_26px_55px_rgba(16,29,46,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(167,112,49,0.35)]"
+      : "",
+    className,
+  );
+
+  const content = (
+    <>
       <div
         className="mb-4 h-1.5 w-12 rounded-full"
         style={{ background: accent ?? "linear-gradient(90deg, #c89d61, #40657b)" }}
@@ -33,6 +40,12 @@ export function StatCard({
         {value}
       </p>
       <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">{description}</p>
-    </div>
+    </>
   );
+
+  if (href) {
+    return <Link href={href} className={classes}>{content}</Link>;
+  }
+
+  return <div className={classes}>{content}</div>;
 }

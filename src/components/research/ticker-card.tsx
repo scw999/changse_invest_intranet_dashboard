@@ -15,6 +15,7 @@ type TickerCardProps = {
   outlookCount: number;
   followUpCount: number;
   trackedStatus?: string;
+  href?: string;
 };
 
 export function TickerCard({
@@ -23,12 +24,13 @@ export function TickerCard({
   outlookCount,
   followUpCount,
   trackedStatus,
+  href,
 }: TickerCardProps) {
   const displayTicker = getDisplayTicker(ticker);
 
   return (
     <Link
-      href={`/tickers/${encodeURIComponent(ticker.symbol)}`}
+      href={href ?? `/tickers/${encodeURIComponent(ticker.symbol)}`}
       className="group flex h-full flex-col rounded-[24px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.82)] p-4 shadow-[0_20px_55px_rgba(16,29,46,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_26px_70px_rgba(16,29,46,0.1)] md:rounded-[28px] md:p-5"
     >
       <div className="flex flex-wrap items-center gap-2">

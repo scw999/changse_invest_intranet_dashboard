@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-import { cloneMockDataset } from "@/lib/mock-data";
+import { cloneEmptyDataset } from "@/lib/mock-data";
 import type {
   FollowUpRecord,
   NewsItem,
@@ -78,21 +78,21 @@ function buildFollowUpRecord(
     resolvedAt: item.followUpStatus === "Pending" ? null : new Date().toISOString(),
     outcomeSummary:
       item.followUpStatus === "Pending"
-        ? "후속 점검 대기 상태입니다."
-        : "후속 결과 점검을 완료했습니다.",
-    resultNote: item.followUpNote || "뉴스 운영 화면에서 생성된 기본 메모입니다.",
+        ? "후속 확인 대기 상태입니다."
+        : "후속 결과 입력이 완료됐습니다.",
+    resultNote: item.followUpNote || "기본 팔로업 메모입니다.",
     marketImpact:
       item.followUpStatus === "Pending"
-        ? "시장 반응 확인이 아직 필요합니다."
-        : "시장 영향 점검을 마쳤습니다.",
+        ? "시장 반응을 추가로 확인해야 합니다."
+        : "시장 영향 기록이 반영됐습니다.",
   };
 }
 
 export const useResearchStore = create<ResearchStore>()((set) => ({
-  ...cloneMockDataset(),
-  dataSource: "mock",
-  syncStatus: "idle",
-  syncMessage: "시드 데이터로 시작했습니다.",
+  ...cloneEmptyDataset(),
+  dataSource: "supabase",
+  syncStatus: "loading",
+  syncMessage: "데이터를 불러오는 중입니다.",
   lastSyncedAt: undefined,
   addNewsItem: (input) =>
     set((state) => {
@@ -221,10 +221,10 @@ export const useResearchStore = create<ResearchStore>()((set) => ({
   setSyncState: (state) => set(() => state),
   resetData: () =>
     set(() => ({
-      ...cloneMockDataset(),
-      dataSource: "mock",
-      syncStatus: "idle",
-      syncMessage: "시드 데이터로 초기화했습니다.",
+      ...cloneEmptyDataset(),
+      dataSource: "supabase",
+      syncStatus: "loading",
+      syncMessage: "데이터를 다시 불러오는 중입니다.",
       lastSyncedAt: undefined,
     })),
 }));

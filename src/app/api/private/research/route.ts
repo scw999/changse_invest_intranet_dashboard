@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { requirePrivateRouteRequest } from "@/lib/auth/route";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { fetchResearchDataset } from "@/lib/supabase/research";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const authResponse = await requirePrivateRouteRequest(request);
-  if (authResponse) {
-    return authResponse;
-  }
-
+export async function GET() {
   try {
     const dataset = await fetchResearchDataset(createServiceRoleSupabaseClient());
 

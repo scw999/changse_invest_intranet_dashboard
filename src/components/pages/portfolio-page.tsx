@@ -1,8 +1,9 @@
 "use client";
 
 import { startTransition, useState } from "react";
-import { Bot, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { Bot, Lock, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 
+import { useViewer } from "@/components/auth/viewer-context";
 import { PageIntro } from "@/components/layout/page-intro";
 import { PortfolioCard } from "@/components/research/portfolio-card";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +56,9 @@ async function readDatasetResponse(response: Response): Promise<ResearchDataset>
 
   if (!response.ok || !isDataset) {
     const message =
-      body && "error" in body ? body.error || "포트폴리오 작업에 실패했습니다." : "포트폴리오 작업에 실패했습니다.";
+      body && "error" in body
+        ? body.error || "포트폴리오 작업에 실패했습니다."
+        : "포트폴리오 작업에 실패했습니다.";
     throw new Error(message);
   }
 
@@ -63,9 +66,13 @@ async function readDatasetResponse(response: Response): Promise<ResearchDataset>
 }
 
 export function PortfolioPage() {
+  const viewer = useViewer();
+  const isReadOnly = viewer.isGuest || !viewer.isAdmin;
+
   const dataset = useResearchStore((state) => state);
   const hydrateDataset = useResearchStore((state) => state.hydrateDataset);
   const setSyncState = useResearchStore((state) => state.setSyncState);
+
   const [form, setForm] = useState(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -84,6 +91,11 @@ export function PortfolioPage() {
   };
 
   const runMutation = async (url: string, options: RequestInit, successMessage: string) => {
+    if (isReadOnly) {
+      setErrorMessage("게스트 뷰어는 읽기 전용입니다. 관리자 로그인 후 수정할 수 있습니다.");
+      return;
+    }
+
     setIsSubmitting(true);
     setStatusMessage(null);
     setErrorMessage(null);
@@ -111,7 +123,8 @@ export function PortfolioPage() {
         lastSyncedAt: new Date().toISOString(),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "포트폴리오 작업에 실패했습니다.";
+      const message =
+        error instanceof Error ? error.message : "포트폴리오 작업에 실패했습니다.";
       setErrorMessage(message);
       setSyncState({
         syncStatus: "error",
@@ -133,10 +146,12 @@ export function PortfolioPage() {
         cache: "no-store",
       });
       const nextDataset = await readDatasetResponse(response);
-      applyDataset(nextDataset, "Supabase 기준 최신 포트폴리오 상태로 새로고침했습니다.");
-      setStatusMessage("Supabase 기준 최신 포트폴리오 상태로 새로고침했습니다.");
+      applyDataset(nextDataset, "Supabase 기준 최신 포트폴리오 상태를 불러왔습니다.");
+      setStatusMessage("Supabase 기준 최신 포트폴리오 상태를 불러왔습니다.");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "새로고침에 실패했습니다.");
+      setErrorMessage(
+        error instanceof Error ? error.message : "데이터를 다시 불러오지 못했습니다.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -192,7 +207,11 @@ export function PortfolioPage() {
       <PageIntro
         eyebrow="포트폴리오 / 관심종목"
         title="보유 자산과 관심 범위"
-        description="이 화면도 관리자 세션이 확인된 private API를 통해서만 저장됩니다. 실제 운영에서는 텔레그램의 창세봇이 같은 내부 ingest 경로를 호출해 내용을 채우는 방식을 기본으로 둘 수 있습니다."
+        description={
+          isReadOnly
+            ? "게스트는 읽기 전용으로 데이터만 볼 수 있습니다. 수정은 관리자 로그인 후 가능하며, 실제 운영 입력은 창세봇과 internal API 중심으로 처리됩니다."
+            : "관리자만 private API를 통해 수정할 수 있습니다. 실제 운영에서는 텔레그램의 창세봇이 같은 내부 경로를 호출해 데이터를 채우는 흐름을 기본으로 둡니다."
+        }
         meta={`총 ${dataset.portfolioItems.length}개 자산 추적 중`}
       >
         <div className="flex flex-wrap gap-2">
@@ -205,9 +224,13 @@ export function PortfolioPage() {
             <RefreshCw className={`h-4 w-4 ${isSubmitting ? "animate-spin" : ""}`} />
             서버 기준 새로고침
           </button>
-          <Badge variant="outline">관리자 전용 저장</Badge>
+          {isReadOnly ? (
+            <Badge variant="outline">게스트 읽기 전용</Badge>
+          ) : (
+            <Badge variant="outline">관리자 쓰기 가능</Badge>
+          )}
           <Badge variant="outline">창세봇 연동 준비</Badge>
-          <Badge variant="outline">Public write 차단</Badge>
+          <Badge variant="outline">공개 쓰기 차단</Badge>
         </div>
       </PageIntro>
 
@@ -223,16 +246,32 @@ export function PortfolioPage() {
         </div>
       ) : null}
 
+      {isReadOnly ? (
+        <div className="rounded-[26px] border border-[rgba(53,92,125,0.14)] bg-[rgba(53,92,125,0.06)] p-5">
+          <div className="flex items-start gap-3">
+            <Lock className="mt-0.5 h-5 w-5 text-[var(--text-strong)]" />
+            <div>
+              <p className="font-semibold text-[var(--text-strong)]">게스트 뷰어 안내</p>
+              <p className="mt-1 text-sm leading-7 text-[var(--text-muted)]">
+                포트폴리오, 관심종목, 선호 설정은 모두 읽기 전용으로 표시됩니다. 변경이 필요하면
+                관리자 로그인 또는 창세봇 경로를 사용하세요.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="rounded-[26px] border border-[rgba(35,60,95,0.12)] bg-[rgba(255,255,255,0.78)] p-5">
         <div className="flex items-start gap-3">
           <Bot className="mt-0.5 h-5 w-5 text-[var(--text-strong)]" />
           <div>
             <p className="font-semibold text-[var(--text-strong)]">권장 운영 방식</p>
-            <p className="mt-1 text-sm leading-7 text-[var(--text-muted)]">
-              텔레그램에서 창세봇에게 NVDA를 관심종목에 추가해줘, 삼성전자 비중 8%로 메모
-              업데이트해줘, AI 공급망 테마를 관심 테마로 넣어줘처럼 요청하면, 봇이 내부
-              authenticated ingest API를 호출해 저장하는 구조로 준비되어 있습니다.
-            </p>
+              <p className="mt-1 text-sm leading-7 text-[var(--text-muted)]">
+              텔레그램에서 창세봇에게 &quot;NVDA를 관심종목에 추가&quot;,
+              &quot;효성중공업 메모 수정&quot;, &quot;방산 테마 관심 등록&quot;처럼 요청하면,
+              봇이 내부 authenticated ingest API를 통해 안전하게 데이터를 저장하는 구조로
+              설계되어 있습니다.
+              </p>
           </div>
         </div>
       </div>
@@ -247,18 +286,22 @@ export function PortfolioPage() {
         <StatCard
           label="관심"
           value={String(watchlist.length)}
-          description="향후 편입 후보로 모니터링 중인 자산 수입니다."
+          description="향후 진입 후보로 모니터링 중인 자산 수입니다."
           accent="linear-gradient(90deg, #9f6b2c, #ddb27a)"
         />
         <StatCard
           label="관심 테마"
           value={String(dataset.preferences.interestThemeIds.length)}
-          description="개인 relevance 계산에 반영되는 관심 테마 수입니다."
+          description="개인 relevance 계산에 반영될 관심 테마 수입니다."
           accent="linear-gradient(90deg, #355c7d, #6d8fa3)"
         />
         <StatCard
           label="기본 지역"
-          value={dataset.preferences.defaultRegions.map((entry) => regionLabels[entry]).join(" / ")}
+          value={
+            dataset.preferences.defaultRegions.length > 0
+              ? dataset.preferences.defaultRegions.map((entry) => regionLabels[entry]).join(" / ")
+              : "미설정"
+          }
           description="대시보드에서 기본 강조하는 지역 범위입니다."
           accent="linear-gradient(90deg, #5a4f83, #9a8ebb)"
         />
@@ -267,195 +310,213 @@ export function PortfolioPage() {
       <div className="grid gap-6 xl:grid-cols-[1.25fr_0.95fr]">
         <SectionCard
           title="현재 자산 현황"
-          description="삭제 역시 private API를 통해 수행되며, 브라우저 임시 상태만 바꾸지 않습니다."
+          description="실제 저장은 private API를 거치며, 게스트는 현재 상태만 조회할 수 있습니다."
         >
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[rgba(29,123,96,0.18)] bg-[rgba(29,123,96,0.06)] px-4 py-2 text-sm text-[#1d604f]">
             <ShieldCheck className="h-4 w-4" />
-            owner/admin 또는 내부 보조 시스템만 쓰기 가능
+            {isReadOnly ? "게스트는 읽기 전용" : "관리자와 보조 시스템만 쓰기 가능"}
           </div>
           <div className="space-y-5">
             {dataset.portfolioItems.map((item) => (
               <div key={item.id} className="space-y-3">
                 <PortfolioCard item={item} />
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() =>
-                    void runMutation(
-                      "/api/private/portfolio/items",
-                      {
-                        method: "DELETE",
-                        body: JSON.stringify({ id: item.id }),
-                      },
-                      "자산 항목을 삭제했습니다.",
-                    )
-                  }
-                  className="inline-flex items-center gap-2 rounded-full border border-[rgba(140,45,45,0.2)] px-4 py-2 text-sm font-semibold text-[#8d2d2d] transition hover:bg-[rgba(140,45,45,0.06)] disabled:opacity-60"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  자산 삭제
-                </button>
+                {!isReadOnly ? (
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() =>
+                      void runMutation(
+                        "/api/private/portfolio/items",
+                        {
+                          method: "DELETE",
+                          body: JSON.stringify({ id: item.id }),
+                        },
+                        "자산 항목을 삭제했습니다.",
+                      )
+                    }
+                    className="inline-flex items-center gap-2 rounded-full border border-[rgba(140,45,45,0.2)] px-4 py-2 text-sm font-semibold text-[#8d2d2d] transition hover:bg-[rgba(140,45,45,0.06)] disabled:opacity-60"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    자산 삭제
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
         </SectionCard>
 
         <SectionCard
-          title="자산 추가"
-          description="수기 입력도 가능하지만, 실제 운영에선 같은 필드를 창세봇이 내부 토큰 경로로 대신 채우도록 두는 구성이 적합합니다."
+          title={isReadOnly ? "추가 요청 안내" : "자산 추가"}
+          description={
+            isReadOnly
+              ? "게스트는 직접 저장할 수 없습니다. 창세봇 또는 관리자 계정으로 입력하세요."
+              : "관리자는 이 폼으로 수기 입력할 수 있고, 실제 운영에서는 창세봇이 같은 필드를 internal API로 채우게 됩니다."
+          }
         >
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void runMutation(
-                "/api/private/portfolio/items",
-                {
-                  method: "POST",
-                  body: JSON.stringify({
-                    symbol: form.symbol.trim().toUpperCase(),
-                    assetName: form.assetName.trim(),
-                    assetType: form.assetType,
-                    region: form.region,
-                    isHolding: form.isHolding,
-                    isWatchlist: form.isWatchlist,
-                    weight: form.weight ? Number(form.weight) : undefined,
-                    averageCost: form.averageCost ? Number(form.averageCost) : undefined,
-                    memo: form.memo.trim() || undefined,
-                    priority: form.priority,
-                  }),
-                },
-                "자산 항목을 저장했습니다.",
-              ).then(() => {
-                setForm(emptyForm);
-              });
-            }}
-          >
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="티커">
-                <input
-                  required
-                  value={form.symbol}
-                  onChange={(event) => setForm({ ...form, symbol: event.target.value })}
-                  className="field"
-                  placeholder="000660.KS"
-                />
-              </Field>
-              <Field label="자산명">
-                <input
-                  required
-                  value={form.assetName}
-                  onChange={(event) => setForm({ ...form, assetName: event.target.value })}
-                  className="field"
-                  placeholder="SK Hynix"
-                />
-              </Field>
-              <Field label="자산 유형">
-                <select
-                  value={form.assetType}
-                  onChange={(event) =>
-                    setForm({ ...form, assetType: event.target.value as typeof form.assetType })
-                  }
-                  className="field"
-                >
-                  {PORTFOLIO_ASSET_TYPES.map((entry) => (
-                    <option key={entry} value={entry}>
-                      {portfolioAssetTypeLabels[entry]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="지역">
-                <select
-                  value={form.region}
-                  onChange={(event) =>
-                    setForm({ ...form, region: event.target.value as typeof form.region })
-                  }
-                  className="field"
-                >
-                  {REGIONS.map((entry) => (
-                    <option key={entry} value={entry}>
-                      {regionLabels[entry]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="비중 (%)">
-                <input
-                  value={form.weight}
-                  onChange={(event) => setForm({ ...form, weight: event.target.value })}
-                  className="field"
-                  placeholder="10"
-                />
-              </Field>
-              <Field label="평균단가">
-                <input
-                  value={form.averageCost}
-                  onChange={(event) => setForm({ ...form, averageCost: event.target.value })}
-                  className="field"
-                  placeholder="173000"
-                />
-              </Field>
-              <Field label="우선순위">
-                <select
-                  value={form.priority}
-                  onChange={(event) =>
-                    setForm({ ...form, priority: event.target.value as typeof form.priority })
-                  }
-                  className="field"
-                >
-                  {PRIORITY_LEVELS.map((entry) => (
-                    <option key={entry} value={entry}>
-                      {priorityLabels[entry]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+          {isReadOnly ? (
+            <div className="space-y-3 rounded-[24px] border border-dashed border-[var(--border-strong)] bg-[rgba(243,239,231,0.46)] p-5 text-sm leading-7 text-[var(--text-muted)]">
+              <p>게스트 뷰어는 포트폴리오와 관심종목을 직접 수정할 수 없습니다.</p>
+              <p>
+                추가나 수정이 필요하면 텔레그램에서 창세봇에게 요청하거나 관리자 계정으로 로그인해
+                주세요.
+              </p>
             </div>
-
-            <Field label="메모">
-              <textarea
-                value={form.memo}
-                onChange={(event) => setForm({ ...form, memo: event.target.value })}
-                className="field min-h-[120px]"
-                placeholder="창세봇이 남겨줄 운용 메모도 이 필드에 저장됩니다."
-              />
-            </Field>
-
-            <div className="flex flex-wrap gap-3">
-              <label className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm text-[var(--text-muted)]">
-                <input
-                  type="checkbox"
-                  checked={form.isHolding}
-                  onChange={(event) => setForm({ ...form, isHolding: event.target.checked })}
-                />
-                보유
-              </label>
-              <label className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm text-[var(--text-muted)]">
-                <input
-                  type="checkbox"
-                  checked={form.isWatchlist}
-                  onChange={(event) => setForm({ ...form, isWatchlist: event.target.checked })}
-                />
-                관심종목
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-full bg-[var(--text-strong)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+          ) : (
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void runMutation(
+                  "/api/private/portfolio/items",
+                  {
+                    method: "POST",
+                    body: JSON.stringify({
+                      symbol: form.symbol.trim().toUpperCase(),
+                      assetName: form.assetName.trim(),
+                      assetType: form.assetType,
+                      region: form.region,
+                      isHolding: form.isHolding,
+                      isWatchlist: form.isWatchlist,
+                      weight: form.weight ? Number(form.weight) : undefined,
+                      averageCost: form.averageCost ? Number(form.averageCost) : undefined,
+                      memo: form.memo.trim() || undefined,
+                      priority: form.priority,
+                    }),
+                  },
+                  "자산 항목을 저장했습니다.",
+                ).then(() => {
+                  setForm(emptyForm);
+                });
+              }}
             >
-              자산 저장
-            </button>
-          </form>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="심볼">
+                  <input
+                    required
+                    value={form.symbol}
+                    onChange={(event) => setForm({ ...form, symbol: event.target.value })}
+                    className="field"
+                    placeholder="000660.KS"
+                  />
+                </Field>
+                <Field label="자산명">
+                  <input
+                    required
+                    value={form.assetName}
+                    onChange={(event) => setForm({ ...form, assetName: event.target.value })}
+                    className="field"
+                    placeholder="SK Hynix"
+                  />
+                </Field>
+                <Field label="자산 유형">
+                  <select
+                    value={form.assetType}
+                    onChange={(event) =>
+                      setForm({ ...form, assetType: event.target.value as typeof form.assetType })
+                    }
+                    className="field"
+                  >
+                    {PORTFOLIO_ASSET_TYPES.map((entry) => (
+                      <option key={entry} value={entry}>
+                        {portfolioAssetTypeLabels[entry]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="지역">
+                  <select
+                    value={form.region}
+                    onChange={(event) =>
+                      setForm({ ...form, region: event.target.value as typeof form.region })
+                    }
+                    className="field"
+                  >
+                    {REGIONS.map((entry) => (
+                      <option key={entry} value={entry}>
+                        {regionLabels[entry]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="비중 (%)">
+                  <input
+                    value={form.weight}
+                    onChange={(event) => setForm({ ...form, weight: event.target.value })}
+                    className="field"
+                    placeholder="10"
+                  />
+                </Field>
+                <Field label="평균단가">
+                  <input
+                    value={form.averageCost}
+                    onChange={(event) => setForm({ ...form, averageCost: event.target.value })}
+                    className="field"
+                    placeholder="173000"
+                  />
+                </Field>
+                <Field label="우선순위">
+                  <select
+                    value={form.priority}
+                    onChange={(event) =>
+                      setForm({ ...form, priority: event.target.value as typeof form.priority })
+                    }
+                    className="field"
+                  >
+                    {PRIORITY_LEVELS.map((entry) => (
+                      <option key={entry} value={entry}>
+                        {priorityLabels[entry]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+
+              <Field label="메모">
+                <textarea
+                  value={form.memo}
+                  onChange={(event) => setForm({ ...form, memo: event.target.value })}
+                  className="field min-h-[120px]"
+                  placeholder="창세봇이 대신 입력해도 같은 필드 구조로 저장됩니다."
+                />
+              </Field>
+
+              <div className="flex flex-wrap gap-3">
+                <label className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm text-[var(--text-muted)]">
+                  <input
+                    type="checkbox"
+                    checked={form.isHolding}
+                    onChange={(event) => setForm({ ...form, isHolding: event.target.checked })}
+                  />
+                  보유
+                </label>
+                <label className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm text-[var(--text-muted)]">
+                  <input
+                    type="checkbox"
+                    checked={form.isWatchlist}
+                    onChange={(event) =>
+                      setForm({ ...form, isWatchlist: event.target.checked })
+                    }
+                  />
+                  관심종목
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-full bg-[var(--text-strong)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+              >
+                자산 저장
+              </button>
+            </form>
+          )}
         </SectionCard>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <SectionCard
           title="관심 테마"
-          description="창세봇이 이 값을 기준으로 관련 뉴스 relevance를 더 높게 추천하도록 확장할 수 있습니다."
+          description="개인 relevance 계산과 우선순위 반영에 쓰이는 관심 테마입니다."
         >
           <div className="flex flex-wrap gap-2">
             {dataset.themes.map((theme) => {
@@ -465,13 +526,13 @@ export function PortfolioPage() {
                 <button
                   key={theme.id}
                   type="button"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isReadOnly}
                   onClick={() => void toggleThemeInterest(theme.id)}
                   className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
                     active
                       ? "border-transparent bg-[var(--text-strong)] text-white"
                       : "border-[var(--border-strong)] text-[var(--text-muted)] hover:bg-[rgba(23,42,70,0.05)]"
-                  } disabled:opacity-60`}
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {getDisplayTheme(theme).name}
                 </button>
@@ -482,13 +543,13 @@ export function PortfolioPage() {
 
         <SectionCard
           title="기본 설정"
-          description="정렬, 선호 슬롯, 지역, compact mode도 이제 서버에서만 저장됩니다."
+          description="정렬, 선호 슬롯, 지역, compact mode도 관리자만 저장할 수 있습니다."
         >
           <div className="space-y-6">
             <Field label="기본 정렬">
               <select
                 value={dataset.preferences.preferredSort}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isReadOnly}
                 onChange={(event) =>
                   void updatePreferences({
                     preferredSort: event.target.value as (typeof NEWS_SORT_OPTIONS)[number],
@@ -516,13 +577,13 @@ export function PortfolioPage() {
                     <button
                       key={slot}
                       type="button"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isReadOnly}
                       onClick={() => void toggleFavoriteSlot(slot)}
                       className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
                         active
                           ? "border-transparent bg-[var(--text-strong)] text-white"
                           : "border-[var(--border-strong)] text-[var(--text-muted)] hover:bg-[rgba(23,42,70,0.05)]"
-                      } disabled:opacity-60`}
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       {slot}:00
                     </button>
@@ -543,13 +604,13 @@ export function PortfolioPage() {
                     <button
                       key={entry}
                       type="button"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isReadOnly}
                       onClick={() => void toggleDefaultRegion(entry)}
                       className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
                         active
                           ? "border-transparent bg-[var(--text-strong)] text-white"
                           : "border-[var(--border-strong)] text-[var(--text-muted)] hover:bg-[rgba(23,42,70,0.05)]"
-                      } disabled:opacity-60`}
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       {regionLabels[entry]}
                     </button>
@@ -562,7 +623,7 @@ export function PortfolioPage() {
               <input
                 type="checkbox"
                 checked={dataset.preferences.compactMode}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isReadOnly}
                 onChange={(event) => void updatePreferences({ compactMode: event.target.checked })}
               />
               모바일 compact mode

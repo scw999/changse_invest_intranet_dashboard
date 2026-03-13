@@ -49,6 +49,7 @@ export const NEWS_SORT_OPTIONS = [
   "followUp",
   "source",
 ] as const;
+export const CONTENT_TYPES = ["news", "analysis", "opinion", "monitoring"] as const;
 
 export type ScanSlot = (typeof SCAN_SLOTS)[number];
 export type Region = (typeof REGIONS)[number];
@@ -60,6 +61,16 @@ export type PortfolioAssetType = (typeof PORTFOLIO_ASSET_TYPES)[number];
 export type ThemeCategory = (typeof THEME_CATEGORIES)[number];
 export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
 export type NewsSortOption = (typeof NEWS_SORT_OPTIONS)[number];
+export type ContentType = (typeof CONTENT_TYPES)[number];
+
+export type MonitoringMeta = {
+  targetTickers?: string[];
+  note?: string;
+  referencePrice?: string;
+  currentSnapshot?: string;
+  triggerCondition?: string;
+  nextCheckNote?: string;
+};
 
 export type Theme = {
   id: string;
@@ -83,6 +94,7 @@ export type Ticker = {
 
 export type NewsItem = {
   id: string;
+  contentType?: ContentType;
   title: string;
   summary: string;
   sourceName: string;
@@ -99,6 +111,7 @@ export type NewsItem = {
   followUpStatus: FollowUpStatus;
   followUpNote: string;
   importance: ImportanceLevel;
+  monitoring?: MonitoringMeta;
   createdAt: string;
   updatedAt: string;
 };

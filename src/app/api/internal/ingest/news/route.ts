@@ -21,6 +21,7 @@ export const dynamic = "force-dynamic";
 
 function toNewsRow(payload: NewsMutationInput) {
   return {
+    content_type: payload.contentType ?? "news",
     title: payload.title.trim(),
     summary: payload.summary.trim(),
     source_name: payload.sourceName.trim(),
@@ -35,6 +36,7 @@ function toNewsRow(payload: NewsMutationInput) {
     follow_up_status: payload.followUpStatus,
     follow_up_note: payload.followUpNote.trim(),
     importance: payload.importance,
+    content_meta: payload.monitoring ? { monitoring: payload.monitoring } : {},
   };
 }
 

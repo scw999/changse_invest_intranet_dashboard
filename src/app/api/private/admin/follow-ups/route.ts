@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requirePrivateRouteRequest } from "@/lib/auth/route";
+import { requireAdminRouteRequest } from "@/lib/auth/route";
 import { getViewer } from "@/lib/auth/session";
 import { fetchResearchDataset } from "@/lib/supabase/research";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
@@ -23,7 +23,7 @@ function isFollowUpPayload(
 }
 
 export async function PATCH(request: Request) {
-  const authResponse = await requirePrivateRouteRequest(request);
+  const authResponse = await requireAdminRouteRequest(request);
   if (authResponse) {
     return authResponse;
   }

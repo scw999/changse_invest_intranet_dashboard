@@ -11,6 +11,7 @@ type ThemeCardProps = {
   newsCount: number;
   pendingCount: number;
   followUpCount: number;
+  href?: string;
 };
 
 export function ThemeCard({
@@ -18,12 +19,13 @@ export function ThemeCard({
   newsCount,
   pendingCount,
   followUpCount,
+  href,
 }: ThemeCardProps) {
   const displayTheme = getDisplayTheme(theme);
 
   return (
     <Link
-      href={`/themes/${theme.slug}`}
+      href={href ?? `/themes/${theme.slug}`}
       className="group flex h-full flex-col rounded-[24px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.82)] p-4 shadow-[0_20px_55px_rgba(16,29,46,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_26px_70px_rgba(16,29,46,0.1)] md:rounded-[28px] md:p-5"
     >
       <div

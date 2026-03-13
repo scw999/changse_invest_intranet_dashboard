@@ -26,6 +26,7 @@ type TickerRow = {
 
 type NewsRow = {
   id: string;
+  content_type: NonNullable<ResearchDataset["newsItems"][number]["contentType"]>;
   title: string;
   summary: string;
   source_name: string;
@@ -40,6 +41,7 @@ type NewsRow = {
   follow_up_status: ResearchDataset["newsItems"][number]["followUpStatus"];
   follow_up_note: string;
   importance: ResearchDataset["newsItems"][number]["importance"];
+  content_meta: { monitoring?: ResearchDataset["newsItems"][number]["monitoring"] } | null;
   created_at: string;
   updated_at: string;
 };
@@ -115,7 +117,7 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
     client
       .from("news_items")
       .select(
-        "id, title, summary, source_name, source_url, published_at, scan_slot, region, affected_asset_classes, market_interpretation, directional_view, action_idea, follow_up_status, follow_up_note, importance, created_at, updated_at",
+        "id, content_type, title, summary, source_name, source_url, published_at, scan_slot, region, affected_asset_classes, market_interpretation, directional_view, action_idea, follow_up_status, follow_up_note, importance, content_meta, created_at, updated_at",
       )
       .order("published_at", { ascending: false }),
     client.from("news_item_themes").select("news_item_id, theme_id"),
@@ -191,6 +193,7 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
     })),
     newsItems: ((newsResult.data ?? []) as NewsRow[]).map((row) => ({
       id: row.id,
+      contentType: row.content_type ?? "news",
       title: row.title,
       summary: row.summary,
       sourceName: row.source_name,
@@ -207,6 +210,7 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
       followUpStatus: row.follow_up_status,
       followUpNote: row.follow_up_note,
       importance: row.importance,
+      monitoring: row.content_meta?.monitoring,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     })),

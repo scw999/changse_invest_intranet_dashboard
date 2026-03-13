@@ -52,6 +52,7 @@ create table public.tickers (
 create table public.news_items (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null default auth.uid(),
+  content_type text not null default 'news' check (content_type in ('news', 'analysis', 'opinion', 'monitoring')),
   title text not null,
   summary text not null default '',
   source_name text not null default '',
@@ -66,6 +67,7 @@ create table public.news_items (
   follow_up_status public.follow_up_status not null default 'Pending',
   follow_up_note text not null default '',
   importance public.importance_level not null default 'Medium',
+  content_meta jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -142,6 +144,7 @@ create index idx_news_items_owner_published_at on public.news_items (owner_id, p
 create index idx_news_items_owner_slot on public.news_items (owner_id, scan_slot);
 create index idx_news_items_owner_region on public.news_items (owner_id, region);
 create index idx_news_items_owner_importance on public.news_items (owner_id, importance);
+create index idx_news_items_owner_content_type on public.news_items (owner_id, content_type, published_at desc);
 create index idx_follow_up_records_owner_status on public.follow_up_records (owner_id, status, resolved_at desc);
 create index idx_portfolio_items_owner_priority on public.portfolio_items (owner_id, priority);
 create index idx_tickers_owner_region on public.tickers (owner_id, region);

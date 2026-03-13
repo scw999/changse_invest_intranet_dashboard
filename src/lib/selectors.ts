@@ -2,6 +2,7 @@ import { parseISO } from "date-fns";
 
 import { getDisplayNewsItem } from "@/lib/content-kr";
 import type {
+  ContentType,
   FollowUpRecord,
   ImportanceLevel,
   NewsItem,
@@ -18,6 +19,7 @@ import { sortNewsItems, toDateKey } from "@/lib/utils";
 
 export type NewsFilters = {
   search?: string;
+  contentType?: ContentType | "all";
   date?: string;
   slot?: ScanSlot | "all";
   region?: Region | "all";
@@ -59,6 +61,11 @@ export function getUniqueDateKeys(newsItems: NewsItem[]) {
 export function filterNewsItems(newsItems: NewsItem[], filters: NewsFilters) {
   const filtered = newsItems.filter((item) => {
     const displayItem = getDisplayNewsItem(item);
+    const contentType = item.contentType ?? "news";
+
+    if (filters.contentType && filters.contentType !== "all" && contentType !== filters.contentType) {
+      return false;
+    }
 
     if (filters.date && filters.date !== "all" && toDateKey(item.publishedAt) !== filters.date) {
       return false;
@@ -95,11 +102,16 @@ export function filterNewsItems(newsItems: NewsItem[], filters: NewsFilters) {
     if (filters.search) {
       const query = filters.search.toLowerCase();
       const haystack = [
+        contentType,
         displayItem.title,
         displayItem.summary,
         displayItem.marketInterpretation,
         displayItem.actionIdea,
         displayItem.sourceName,
+        item.monitoring?.note ?? "",
+        item.monitoring?.triggerCondition ?? "",
+        item.monitoring?.nextCheckNote ?? "",
+        ...(item.monitoring?.targetTickers ?? []),
       ]
         .join(" ")
         .toLowerCase();
@@ -123,6 +135,10 @@ export function getTodayNews(newsItems: NewsItem[]) {
 
   const dateKey = toDateKey(latestDate);
   return filterNewsItems(newsItems, { date: dateKey, sort: "importance" });
+}
+
+export function getContentTypeItems(newsItems: NewsItem[], contentType: ContentType) {
+  return filterNewsItems(newsItems, { contentType, sort: "latest" });
 }
 
 export function getSlotBuckets(newsItems: NewsItem[]) {

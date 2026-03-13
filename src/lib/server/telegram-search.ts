@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchResearchDataset } from "@/lib/supabase/research";
 import { formatEntityRef } from "@/lib/server/private-admin";
 
-type SearchScope = "news" | "followup" | "portfolio" | "ticker" | "theme";
+export type SearchScope = "news" | "followup" | "portfolio" | "ticker" | "theme";
 
 function includesQuery(haystack: string, query: string) {
   return haystack.toLowerCase().includes(query.toLowerCase());
@@ -15,6 +15,7 @@ export async function searchResearchDataset(
   client: SupabaseClient,
   scope: SearchScope,
   query: string,
+  contentType?: "news" | "analysis" | "opinion" | "monitoring",
 ) {
   const dataset = await fetchResearchDataset(client);
   const q = query.trim();
@@ -25,9 +26,22 @@ export async function searchResearchDataset(
 
   if (scope === "news") {
     return dataset.newsItems
+      .filter((item) => !contentType || (item.contentType ?? "news") === contentType)
       .filter((item) =>
         includesQuery(
-          [item.title, item.summary, item.marketInterpretation, item.actionIdea, item.sourceName].join(" "),
+          [
+            item.contentType ?? "news",
+            item.title,
+            item.summary,
+            item.marketInterpretation,
+            item.actionIdea,
+            item.sourceName,
+            item.followUpNote,
+            item.monitoring?.note ?? "",
+            item.monitoring?.triggerCondition ?? "",
+            item.monitoring?.nextCheckNote ?? "",
+            ...(item.monitoring?.targetTickers ?? []),
+          ].join(" "),
           q,
         ),
       )
@@ -35,7 +49,7 @@ export async function searchResearchDataset(
       .map((item) => ({
         ref: formatEntityRef(item.id),
         id: item.id,
-        line: `[news:${formatEntityRef(item.id)}] ${item.scanSlot} ${item.region} ${item.title}`,
+        line: `[${item.contentType ?? "news"}:${formatEntityRef(item.id)}] ${item.scanSlot} ${item.region} ${item.title}`,
       }));
   }
 
@@ -98,6 +112,18 @@ export async function searchResearchDataset(
       id: item.id,
       line: `[theme:${formatEntityRef(item.id)}] ${item.name}`,
     }));
+}
+
+export async function getResearchDatasetSummary(client: SupabaseClient) {
+  const dataset = await fetchResearchDataset(client);
+
+  return {
+    themes: dataset.themes.length,
+    tickers: dataset.tickers.length,
+    newsItems: dataset.newsItems.length,
+    followUps: dataset.followUps.length,
+    portfolioItems: dataset.portfolioItems.length,
+  };
 }
 
 export function formatSearchResults(scope: SearchScope, query: string, lines: string[]) {
