@@ -7,7 +7,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import {
   ensureMutationSuccess,
   resolveResearchOwnerId,
-  slugifyThemeName,
+  upsertTheme,
   type ThemeMutationInput,
 } from "@/lib/server/private-admin";
 
@@ -18,7 +18,8 @@ function isThemePayload(value: Partial<ThemeMutationInput> | null): value is The
       typeof value.description === "string" &&
       typeof value.category === "string" &&
       typeof value.priority === "string" &&
-      typeof value.color === "string",
+      typeof value.color === "string" &&
+      (value.slug === undefined || typeof value.slug === "string"),
   );
 }
 
@@ -48,16 +49,7 @@ export async function POST(request: Request) {
   const ownerId = await resolveResearchOwnerId(client, viewer.id);
 
   try {
-    const { error } = await client.from("themes").insert({
-      owner_id: ownerId,
-      slug: slugifyThemeName(body.name),
-      name: body.name.trim(),
-      description: body.description.trim(),
-      category: body.category,
-      priority: body.priority,
-      color: body.color.trim(),
-    });
-    ensureMutationSuccess(error, "Failed to create theme.");
+    await upsertTheme(client, ownerId, body);
 
     return respondWithDataset(client);
   } catch (error) {

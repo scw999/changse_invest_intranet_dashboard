@@ -105,12 +105,14 @@ export async function searchResearchDataset(
   }
 
   return dataset.themes
-    .filter((item) => includesQuery([item.name, item.description, item.category].join(" "), q))
+    .filter((item) =>
+      includesQuery([item.name, item.slug, item.description, item.category].join(" "), q),
+    )
     .slice(0, 8)
     .map((item) => ({
       ref: formatEntityRef(item.id),
       id: item.id,
-      line: `[theme:${formatEntityRef(item.id)}] ${item.name}`,
+      line: `[theme:${formatEntityRef(item.id)}] ${item.name} (${item.slug})`,
     }));
 }
 

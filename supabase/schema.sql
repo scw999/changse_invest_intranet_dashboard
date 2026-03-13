@@ -30,6 +30,8 @@ create table public.themes (
   color text not null default '#355c7d',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
+  check (length(btrim(slug)) > 0),
+  check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
   unique (owner_id, slug),
   unique (owner_id, name)
 );

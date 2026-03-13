@@ -459,6 +459,7 @@ export const internalThemeIngestSchema = z.discriminatedUnion("operation", [
   z.object({
     operation: z.literal("upsert"),
     id: commonIdField.optional(),
+    slug: optionalTextField,
     name: textField,
     description: z.preprocess(normalizeTrimmedText, z.string()),
     category: themeCategoryField,

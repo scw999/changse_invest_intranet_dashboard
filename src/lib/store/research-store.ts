@@ -3,6 +3,7 @@
 import { create } from "zustand";
 
 import { cloneEmptyDataset } from "@/lib/mock-data";
+import { getThemeSlugCandidate } from "@/lib/theme-slug";
 import type {
   FollowUpRecord,
   NewsItem,
@@ -53,14 +54,6 @@ export type ResearchStore = ResearchDataset & SyncState & ResearchActions;
 function createId(prefix: string) {
   const uuid = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 10);
   return `${prefix}-${uuid}`;
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 function buildFollowUpRecord(
@@ -128,7 +121,7 @@ export const useResearchStore = create<ResearchStore>()((set) => ({
       themes: [
         {
           id: createId("theme"),
-          slug: slugify(input.slug ?? input.name),
+          slug: getThemeSlugCandidate({ name: input.name, slug: input.slug }),
           ...input,
         },
         ...state.themes,
@@ -141,7 +134,10 @@ export const useResearchStore = create<ResearchStore>()((set) => ({
           ? {
               ...theme,
               ...patch,
-              slug: slugify(patch.slug ?? patch.name ?? theme.name),
+              slug: getThemeSlugCandidate({
+                name: patch.name ?? theme.name,
+                slug: patch.slug ?? theme.slug,
+              }),
             }
           : theme,
       ),

@@ -15,6 +15,12 @@ import type {
   ScanSlot,
   ThemeCategory,
 } from "@/types/research";
+import {
+  buildThemeSlugConflictSuffix,
+  buildThemeSlugFromName,
+  getThemeSlugCandidate,
+  isSafeThemeSlug,
+} from "@/lib/theme-slug";
 
 type OwnerRow = { owner_id: string };
 type IdRow = { id: string };
@@ -51,6 +57,7 @@ export type NewsMutationInput = {
 
 export type ThemeMutationInput = {
   id?: string;
+  slug?: string;
   name: string;
   description: string;
   category: ThemeCategory;
@@ -132,11 +139,7 @@ export function ensureMutationSuccess(
 }
 
 export function slugifyThemeName(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return buildThemeSlugFromName(value);
 }
 
 function normalizeLookupKey(value: string) {
@@ -246,7 +249,7 @@ export async function resolveThemeIds(
     }
 
     const lookupKey = normalizeLookupKey(trimmed);
-    const lookupSlug = slugifyThemeName(trimmed);
+    const lookupSlug = buildThemeSlugFromName(trimmed);
     const match = rows.find(
       (row) =>
         normalizeLookupKey(row.name) === lookupKey ||
@@ -417,10 +420,58 @@ export async function upsertTheme(
   ownerId: string,
   payload: ThemeMutationInput,
 ) {
+  const trimmedName = payload.name.trim();
+  const explicitSlug = payload.slug?.trim();
+  const existingTheme = payload.id
+    ? await (async () => {
+        const { data, error } = await client
+          .from("themes")
+          .select("id, slug")
+          .eq("owner_id", ownerId)
+          .eq("id", payload.id)
+          .maybeSingle();
+        ensureMutationSuccess(error, "Failed to load existing theme.");
+        return data as { id: string; slug: string } | null;
+      })()
+    : null;
+
+  let nextSlug = explicitSlug
+    ? getThemeSlugCandidate({ name: trimmedName, slug: explicitSlug })
+    : existingTheme?.slug && isSafeThemeSlug(existingTheme.slug)
+      ? existingTheme.slug
+      : buildThemeSlugFromName(trimmedName);
+
+  const { data: slugRows, error: slugLookupError } = await client
+    .from("themes")
+    .select("id, slug")
+    .eq("owner_id", ownerId);
+  ensureMutationSuccess(slugLookupError, "Failed to validate theme slug.");
+
+  const conflictingSlug = ((slugRows ?? []) as Array<{ id: string; slug: string }>).find(
+    (row) => row.slug === nextSlug && row.id !== payload.id,
+  );
+
+  if (conflictingSlug) {
+    if (explicitSlug) {
+      throw new Error(`Theme slug "${nextSlug}" is already in use.`);
+    }
+
+    const suffix = buildThemeSlugConflictSuffix({ name: trimmedName, ownerId });
+    nextSlug = `${nextSlug}-${suffix}`;
+
+    const hashedConflict = ((slugRows ?? []) as Array<{ id: string; slug: string }>).find(
+      (row) => row.slug === nextSlug && row.id !== payload.id,
+    );
+
+    if (hashedConflict) {
+      throw new Error(`Generated theme slug "${nextSlug}" is already in use.`);
+    }
+  }
+
   const row = {
     owner_id: ownerId,
-    slug: slugifyThemeName(payload.name),
-    name: payload.name.trim(),
+    slug: nextSlug,
+    name: trimmedName,
     description: payload.description.trim(),
     category: payload.category,
     priority: payload.priority,
