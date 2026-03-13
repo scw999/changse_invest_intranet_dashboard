@@ -19,6 +19,7 @@ import { ResearchBootstrap } from "@/components/layout/research-bootstrap";
 import { SyncStatusBanner } from "@/components/layout/sync-status-banner";
 import type { AppViewer } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
+import type { ResearchDataset } from "@/types/research";
 
 const navItems = [
   { href: "/", label: "투데이", icon: LayoutDashboard },
@@ -33,9 +34,11 @@ const navItems = [
 export function AppShell({
   children,
   viewer,
+  initialDataset,
 }: {
   children: React.ReactNode;
   viewer: AppViewer;
+  initialDataset?: ResearchDataset | null;
 }) {
   const pathname = usePathname();
   const visibleNavItems = viewer.isAdmin
@@ -45,28 +48,38 @@ export function AppShell({
   return (
     <ViewerProvider viewer={viewer}>
       <div className="mx-auto flex min-h-screen max-w-[1700px] gap-4 px-3 py-3 md:gap-6 md:px-6 md:py-6">
-        <ResearchBootstrap />
+        <ResearchBootstrap initialDataset={initialDataset} />
 
         <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[290px] shrink-0 flex-col rounded-[34px] border border-[var(--border-soft)] bg-[rgba(15,27,45,0.94)] p-6 text-white shadow-[0_32px_90px_rgba(7,17,31,0.28)] lg:flex">
           <div>
-            <div className="rounded-[28px] border border-white/12 bg-white/95 p-4 shadow-[0_18px_50px_rgba(7,17,31,0.14)]">
-              <Image
-                src="/changse-logo.png"
-                alt="창세인베스트 로고"
-                width={220}
-                height={220}
-                className="h-auto w-[180px]"
-                priority
-              />
-            </div>
-            <p className="mt-5 text-xs font-semibold tracking-[0.24em] text-white/55">CHANGSE INVEST</p>
-            <h1 className="mt-3 font-[family:var(--font-display)] text-3xl leading-tight">
-              창세인베스트 인트라 시스템
-            </h1>
-            <p className="mt-4 text-sm leading-6 text-white/72">
-              경제 뉴스, 시장 해석, 투자 아이디어와 팔로업 결과를 한 화면에서 운영하는 프라이빗
-              리서치 대시보드입니다.
-            </p>
+            <Link
+              href="/"
+              className="group block rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-5 transition hover:border-[rgba(201,161,91,0.35)] hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.1),rgba(255,255,255,0.04))]"
+            >
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[24px] bg-[rgba(255,255,255,0.95)] shadow-[0_18px_40px_rgba(7,17,31,0.18)]">
+                  <Image
+                    src="/icon.svg"
+                    alt="창세인베스트 로고"
+                    width={56}
+                    height={56}
+                    className="h-14 w-14"
+                    priority
+                  />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold tracking-[0.24em] text-white/55">
+                    CHANGSE INVEST
+                  </p>
+                  <h1 className="mt-2 font-[family:var(--font-display)] text-[1.75rem] leading-tight text-white">
+                    창세인베스트
+                  </h1>
+                  <p className="mt-2 text-sm leading-6 text-white/68">
+                    투데이 리서치와 아카이브를 한 화면에서 정리합니다.
+                  </p>
+                </div>
+              </div>
+            </Link>
           </div>
 
           <nav className="mt-10 space-y-2">
@@ -132,11 +145,7 @@ export function AppShell({
                 </div>
               ))}
             </div>
-            <div className="mt-4 rounded-2xl border border-[rgba(200,157,97,0.25)] bg-[rgba(200,157,97,0.08)] p-4 text-sm leading-6 text-white/78">
-              {viewer.isGuest
-                ? "게스트는 리서치 내용을 읽기 전용으로 볼 수 있습니다. 입력과 수정은 관리자 또는 trusted assistant만 가능합니다."
-                : "현재 앱은 서버 권한 확인 후 리서치 데이터를 불러오는 private MVP입니다. 입력과 수정은 trusted write 경로를 통해 안전하게 처리됩니다."}
-            </div>
+
             <div className="mt-4 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-white/74">
               <div className="flex items-center gap-2 font-semibold text-white/88">
                 <Bell className="h-4 w-4" />
@@ -150,15 +159,15 @@ export function AppShell({
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col pb-[calc(6.75rem+env(safe-area-inset-bottom))] lg:pb-0">
-          <header className="mb-4 flex items-center justify-between rounded-[24px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.65)] px-4 py-3 shadow-[0_18px_45px_rgba(16,29,46,0.05)] backdrop-blur-sm lg:hidden">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="rounded-2xl bg-white px-2 py-1.5 shadow-[0_10px_24px_rgba(16,29,46,0.08)]">
+          <header className="mb-4 flex items-center justify-between rounded-[24px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.78)] px-4 py-3 shadow-[0_18px_45px_rgba(16,29,46,0.05)] backdrop-blur-sm lg:hidden">
+            <Link href="/" className="flex min-w-0 items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[rgba(255,255,255,0.98)] shadow-[0_10px_24px_rgba(16,29,46,0.08)]">
                 <Image
-                  src="/changse-logo.png"
+                  src="/icon.svg"
                   alt="창세인베스트 로고"
-                  width={84}
-                  height={84}
-                  className="h-auto w-14"
+                  width={32}
+                  height={32}
+                  className="h-8 w-8"
                   priority
                 />
               </div>
@@ -167,10 +176,10 @@ export function AppShell({
                   CHANGSE INVEST
                 </p>
                 <p className="font-[family:var(--font-display)] text-lg leading-tight text-[var(--text-strong)]">
-                  창세인베스트 인트라 시스템
+                  창세인베스트
                 </p>
               </div>
-            </div>
+            </Link>
             {viewer.isGuest ? (
               <Link
                 href="/auth/sign-in"

@@ -1,13 +1,30 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { useResearchStore } from "@/lib/store/research-store";
+import type { ResearchDataset } from "@/types/research";
 
-export function ResearchBootstrap() {
+type ResearchBootstrapProps = {
+  initialDataset?: ResearchDataset | null;
+};
+
+export function ResearchBootstrap({ initialDataset }: ResearchBootstrapProps) {
   const hydrateDataset = useResearchStore((state) => state.hydrateDataset);
   const setSyncState = useResearchStore((state) => state.setSyncState);
+  const bootstrappedRef = useRef(false);
+
+  if (initialDataset && !bootstrappedRef.current) {
+    useResearchStore.setState({
+      ...initialDataset,
+      dataSource: "supabase",
+      syncStatus: "success",
+      syncMessage: "서버에서 최신 리서치 데이터를 미리 불러왔습니다.",
+      lastSyncedAt: new Date().toISOString(),
+    });
+    bootstrappedRef.current = true;
+  }
 
   useEffect(() => {
     let active = true;
@@ -17,15 +34,17 @@ export function ResearchBootstrap() {
         setSyncState({
           dataSource: "mock",
           syncStatus: "idle",
-          syncMessage: "Supabase 환경 변수가 없어 시드 데이터로 실행 중입니다.",
+          syncMessage: "Supabase 설정이 없어 시드 데이터로 실행 중입니다.",
         });
         return;
       }
 
-      setSyncState({
-        syncStatus: "loading",
-        syncMessage: "Supabase에서 최신 데이터를 확인하는 중입니다.",
-      });
+      if (!initialDataset) {
+        setSyncState({
+          syncStatus: "loading",
+          syncMessage: "Supabase에서 최신 데이터를 확인하는 중입니다.",
+        });
+      }
 
       try {
         const response = await fetch("/api/private/research", {
@@ -37,7 +56,7 @@ export function ResearchBootstrap() {
           throw new Error("Private research API request failed.");
         }
 
-        const dataset = await response.json();
+        const dataset = (await response.json()) as ResearchDataset;
 
         if (!active) {
           return;
@@ -58,7 +77,7 @@ export function ResearchBootstrap() {
             : "Supabase 조회에 실패해 시드 데이터로 전환했습니다.";
 
         setSyncState({
-          dataSource: "mock",
+          dataSource: initialDataset ? "supabase" : "mock",
           syncStatus: "error",
           syncMessage: message,
         });
@@ -70,7 +89,7 @@ export function ResearchBootstrap() {
     return () => {
       active = false;
     };
-  }, [hydrateDataset, setSyncState]);
+  }, [hydrateDataset, initialDataset, setSyncState]);
 
   return null;
 }
