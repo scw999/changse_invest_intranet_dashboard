@@ -22,7 +22,9 @@ export function SyncStatusBanner() {
       : "border-[rgba(23,42,70,0.12)] bg-[rgba(255,255,255,0.7)] text-[var(--text-muted)]";
 
   return (
-    <div className={`rounded-[18px] border px-4 py-3 text-sm shadow-[0_12px_30px_rgba(16,29,46,0.04)] ${tone}`}>
+    <div
+      className={`rounded-[18px] border px-4 py-3 text-sm shadow-[0_12px_30px_rgba(16,29,46,0.04)] ${tone}`}
+    >
       <div className="flex items-start gap-3">
         <div className="mt-0.5">
           {syncStatus === "loading" ? (
@@ -44,7 +46,7 @@ export function SyncStatusBanner() {
           {syncMessage ? <p className="mt-1 leading-6">{syncMessage}</p> : null}
           {lastSyncedAt ? (
             <p className="mt-1 text-xs opacity-80">
-              마지막 동기화: {new Date(lastSyncedAt).toLocaleString("ko-KR")}
+              마지막 동기화 {new Date(lastSyncedAt).toLocaleString("ko-KR")}
             </p>
           ) : null}
         </div>

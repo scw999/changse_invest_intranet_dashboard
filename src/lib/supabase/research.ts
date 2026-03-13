@@ -1,4 +1,7 @@
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import "server-only";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import type { ResearchDataset } from "@/types/research";
 
 type ThemeRow = {
@@ -6,7 +9,7 @@ type ThemeRow = {
   slug: string;
   name: string;
   description: string;
-  category: string;
+  category: ResearchDataset["themes"][number]["category"];
   priority: ResearchDataset["themes"][number]["priority"];
   color: string;
 };
@@ -85,16 +88,14 @@ function ensureNoError(error: { message: string; code?: string } | null, tableNa
 
   if (error.code === "PGRST205") {
     throw new Error(
-      `Supabase 프로젝트에 ${tableName} 테이블이 없습니다. schema.sql을 먼저 적용해주세요.`,
+      `Supabase project is missing the ${tableName} table. Apply schema.sql before using the private research API.`,
     );
   }
 
-  throw new Error(error.message || `${tableName} 조회에 실패했습니다.`);
+  throw new Error(error.message || `Failed to read ${tableName}.`);
 }
 
-export async function fetchResearchDatasetFromSupabase(): Promise<ResearchDataset> {
-  const client = createBrowserSupabaseClient();
-
+export async function fetchResearchDataset(client: SupabaseClient): Promise<ResearchDataset> {
   const [
     themesResult,
     tickersResult,
@@ -175,7 +176,7 @@ export async function fetchResearchDatasetFromSupabase(): Promise<ResearchDatase
       slug: row.slug,
       name: row.name,
       description: row.description,
-      category: row.category as ResearchDataset["themes"][number]["category"],
+      category: row.category,
       priority: row.priority,
       color: row.color,
     })),

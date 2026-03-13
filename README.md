@@ -1,43 +1,38 @@
 # 창세인베스트 인트라 시스템
 
-일반 뉴스 사이트가 아니라, 시장 뉴스와 해석 메모를 구조적으로 쌓아가는 개인 리서치 운영 대시보드 MVP입니다.
+개인용 시장/경제 리서치 운영 대시보드 MVP입니다. 이 앱은 일반 공개 서비스가 아니라, 소유자와 내부 보조 시스템만 접근하는 private research system을 목표로 합니다.
 
-## 포함 내용
+## 현재 단계
 
-- Next.js App Router + TypeScript + Tailwind CSS
-- 모바일 대응 프리미엄 리서치 대시보드 UI
-- 실행 즉시 동작하는 시드 목데이터
-- 브라우저 저장 기반 MVP CRUD
-  - 뉴스 항목
-  - 테마/태그
-  - 팔로업 업데이트
-  - 포트폴리오/관심종목 입력
-- 2단계를 위한 Supabase 스키마와 시드 SQL
-- Vercel 배포 준비 구조
+- Phase 1 MVP UI 완료
+- Supabase 실데이터 조회 연결 완료
+- 접근 제어 우선 전환 완료
+  - 관리자 이메일 allowlist
+  - private sign-in flow
+  - 서버 측 trusted read path
+  - 내부 assistant ingest route scaffold
+  - 브라우저 localStorage 저장 제거
+- Phase 2 CRUD는 보안 경계 위에서 이어서 연결 예정
 
-## 제품 범위
+## 핵심 원칙
 
-이 MVP는 의도적으로 아래 범위에 집중합니다.
+- 읽기와 쓰기 모두 기본값은 private입니다.
+- 관리자 이메일 allowlist에 포함된 사용자만 앱 내부 화면에 접근할 수 있습니다.
+- 클라이언트가 Supabase에 직접 쓰지 않습니다.
+- 향후 assistant-driven ingestion은 서버 내부 API와 service role key로만 처리합니다.
+- Supabase RLS는 owner 기준으로 엄격하게 유지합니다.
 
-1. 뉴스 관리
-2. 태그 정리
-3. 팔로업 업데이트
-4. 날짜·테마·티커·슬롯 기준 아카이브 탐색
-5. 포트폴리오와 관심종목 입력
-6. 가벼운 연관도 신호
+## 기술 스택
 
-아직 깊게 구현하지 않은 영역:
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- Supabase
+- Vercel
 
-- 리밸런싱 보조
-- 고도화된 방향성 예측
-- 커뮤니티/심리 분석 모듈
-- 퀀트 또는 시뮬레이션 시스템
+## 주요 화면
 
-## 정보 구조
-
-주요 메뉴:
-
-- `투데이`
+- `대시보드 / Today`
 - `아카이브`
 - `테마`
 - `티커`
@@ -45,13 +40,14 @@
 - `뉴스 운영`
 - `포트폴리오 / 관심종목`
 
-상세 아키텍처 메모는 [docs/architecture.md](./docs/architecture.md)에 정리했습니다.
-
 ## 폴더 구조
 
 ```text
 src/
   app/
+    (private)/
+    api/
+    auth/
   components/
   lib/
   types/
@@ -59,154 +55,174 @@ docs/
 supabase/
 ```
 
-[docs/architecture.md](./docs/architecture.md)에서 라우트, 컴포넌트, 데이터 레이어 구성을 더 자세히 볼 수 있습니다.
+상세 설계 메모는 [docs/architecture.md](./docs/architecture.md)에 있습니다.
 
 ## 로컬 실행
 
 ### 1. 의존성 설치
 
-```bash
-npm install
-```
-
-PowerShell에서 실행 정책 오류가 나오면 아래처럼 실행하세요.
-
 ```powershell
 npm.cmd install
 ```
 
-### 2. 개발 서버 실행
+### 2. 환경 변수 설정
+
+`.env.example`을 `.env.local`로 복사한 뒤 값을 채웁니다.
+
+필수 값:
 
 ```bash
-npm run dev
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+ADMIN_EMAIL_ALLOWLIST=
+ASSISTANT_INGEST_TOKEN=
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_WEBHOOK_SECRET=
+TELEGRAM_ALLOWED_CHAT_IDS=
 ```
 
-PowerShell이라면 아래 명령도 가능합니다.
+설명:
+
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase 프로젝트 URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: 로그인과 브라우저 세션용 anon key
+- `SUPABASE_SERVICE_ROLE_KEY`: 서버 전용 trusted read/write 경로용 key
+- `ADMIN_EMAIL_ALLOWLIST`: 접근 허용 이메일 목록, 쉼표로 구분
+- `ASSISTANT_INGEST_TOKEN`: 향후 내부 assistant ingest API 인증 토큰
+- `TELEGRAM_BOT_TOKEN`: 창세봇 Telegram Bot API 토큰
+- `TELEGRAM_WEBHOOK_SECRET`: Telegram webhook secret token
+- `TELEGRAM_ALLOWED_CHAT_IDS`: 창세봇이 허용할 Telegram chat id 목록
+
+### 3. 개발 서버 실행
 
 ```powershell
 npm.cmd run dev
 ```
 
-브라우저에서 [http://localhost:3000](http://localhost:3000)을 열면 됩니다.
+브라우저에서 [http://localhost:3000](http://localhost:3000)을 엽니다.
 
-### 3. 품질 점검
+### 4. 검증
 
-```bash
-npm run lint
-npm run typecheck
-npm run build
+```powershell
+npm.cmd run lint
+npm.cmd run typecheck
+npm.cmd run build
 ```
 
-## 현재 데이터 동작 방식
+## 인증 및 접근 제어
 
-- UI는 [`src/lib/mock-data.ts`](./src/lib/mock-data.ts)의 시드 목데이터로 바로 동작합니다.
-- 런타임 변경사항은 Zustand 기반 브라우저 저장소에 유지됩니다.
-- 그래서 Supabase 연결 전에도 바로 사용 가능합니다.
+### 로그인 흐름
+
+- 사용자는 `/auth/sign-in`에서 magic link 이메일 로그인을 사용합니다.
+- 로그인 후 서버가 세션을 확인합니다.
+- allowlist에 없는 이메일은 `/auth/access-denied`로 이동합니다.
+
+### 관리자 접근
+
+- `ADMIN_EMAIL_ALLOWLIST`에 포함된 이메일만 private route에 접근할 수 있습니다.
+- `Admin / News Ops` 같은 편집 화면도 같은 방식으로 보호됩니다.
+
+### 서버 측 trusted path
+
+- 실제 리서치 데이터 조회는 `/api/private/research`를 통해 서버에서만 수행합니다.
+- 이 route는 인증된 allowlisted admin 세션이 있어야 응답합니다.
+- 내부에서는 `SUPABASE_SERVICE_ROLE_KEY`를 사용해 Supabase를 읽습니다.
+
+### assistant ingest 준비 경로
+
+- `/api/internal/ingest/news`
+- `Authorization: Bearer <ASSISTANT_INGEST_TOKEN>` 헤더 필요
+- 현재는 인증/검증 골격만 준비된 상태이며 실제 DB write는 아직 연결하지 않았습니다.
 
 ## Supabase 설정
 
-### 1. Supabase 프로젝트 생성
+### 1. 기본 스키마 적용
 
-[Supabase](https://supabase.com/)에서 새 프로젝트를 만듭니다.
+Supabase SQL Editor에서 아래 파일을 실행합니다.
 
-### 2. 환경 변수 추가
+1. [supabase/schema.sql](./supabase/schema.sql)
+2. [supabase/seed.sql](./supabase/seed.sql)
 
-`.env.example`을 `.env.local`로 복사한 뒤 아래 값을 채웁니다.
+### 2. 기존 프로젝트 하드닝
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-```
+이전에 public read 정책을 열어둔 프로젝트라면 아래 파일도 추가로 실행해야 합니다.
 
-현재 기준 메모:
+1. [supabase/private-access-hardening.sql](./supabase/private-access-hardening.sql)
 
-- 1단계 UI는 Supabase 없이도 실행됩니다.
-- 이 환경 변수는 2단계 전환과 Vercel 배포 준비용입니다.
+이 파일은 과거의 public read 정책을 제거하고, private-by-default 상태로 되돌립니다.
 
-### 3. 스키마 적용
+### 3. 현재 RLS 방향
 
-Supabase SQL Editor에서 [`supabase/schema.sql`](./supabase/schema.sql)을 실행합니다.
+- owner row만 직접 접근 가능
+- public select 없음
+- public insert/update/delete 없음
+- 클라이언트는 service role key를 볼 수 없음
+- 관리자 앱도 trusted server route를 통해서만 데이터에 접근
 
-생성되는 주요 테이블:
+## 시드 데이터
 
-- themes
-- tickers
-- news_items
-- follow_up_records
-- portfolio_items
-- user_preferences
-- join tables
-- RLS policies
+시드 데이터는 아래 엔티티를 포함합니다.
 
-### 4. Supabase 시드 입력
-
-스키마 적용 후 [`supabase/seed.sql`](./supabase/seed.sql)을 실행합니다.
-
-중요:
-
-- `seed.sql`은 초기 MVP 시딩을 쉽게 하기 위해 데모 `owner_id` UUID를 사용합니다.
-- 나중에 실제 인증 사용자와 연결하려면 해당 UUID를 바꿔야 합니다.
-
-## 시드 데이터 안내
-
-시드 경로는 두 가지입니다.
-
-### 앱 기본 시드
-
-별도 작업이 필요 없습니다. 앱이 현실감 있는 목데이터와 함께 바로 실행됩니다.
-
-### Supabase SQL 시드
-
-1. [`supabase/schema.sql`](./supabase/schema.sql)을 적용합니다.
-2. [`supabase/seed.sql`](./supabase/seed.sql)을 적용합니다.
-3. 2단계에서 로컬 MVP 스토어 대신 Supabase 읽기/쓰기 로직을 연결합니다.
+- `themes`
+- `tickers`
+- `news_items`
+- `news_item_themes`
+- `news_item_tickers`
+- `follow_up_records`
+- `portfolio_items`
+- `user_preferences`
+- `user_theme_interests`
 
 ## Vercel 배포
 
-### 1. Git 저장소에 푸시
+### 1. 프로젝트 연결
 
-GitHub, GitLab, Bitbucket 중 하나에 올리면 가장 매끄럽게 배포할 수 있습니다.
+GitHub 저장소를 Vercel 프로젝트에 연결합니다.
 
-### 2. Vercel에 프로젝트 가져오기
+### 2. 환경 변수 추가
 
-Vercel에서 새 프로젝트를 만들고 이 저장소를 선택합니다.
-
-### 3. 환경 변수 설정
-
-Vercel Project Settings에 아래 값을 추가합니다.
+Vercel Project Settings에서 아래 값을 설정합니다.
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+ADMIN_EMAIL_ALLOWLIST
+ASSISTANT_INGEST_TOKEN
 ```
 
-### 4. 배포
+주의:
 
-Vercel이 Next.js를 자동으로 감지하므로 기본 설정으로 배포해도 충분합니다.
+- `SUPABASE_SERVICE_ROLE_KEY`와 `ASSISTANT_INGEST_TOKEN`은 절대 클라이언트 코드로 노출되면 안 됩니다.
+- 값 변경 후에는 redeploy가 필요합니다.
 
-## 구현 단계
+### 3. 운영 체크
 
-### 1단계
+- sign-in 페이지가 뜨는지 확인
+- allowlist 이메일만 진입 가능한지 확인
+- 비허용 이메일은 access denied로 이동하는지 확인
+- private research API가 로그인 없이 응답하지 않는지 확인
 
-- 아키텍처와 페이지 구조
-- 목데이터
-- 다듬어진 UI
-- 필터와 아카이브 흐름
-- 뉴스 운영 폼
-- 포트폴리오/관심종목 입력
+## 다음 Phase 2 범위
 
-### 2단계
+보안 경계가 먼저 정리된 상태이므로, 다음 CRUD는 아래 순서로 붙이는 것이 안전합니다.
 
-- 실제 Supabase 연동
-- 인증 기반 CRUD
-- 서버 영속 데이터
+1. `Admin / News Ops` 서버 action 또는 private API write 연결
+2. `Portfolio / Watchlist` write 연결
+3. `Follow-up` status update 연결
+4. assistant ingest route의 실제 write 연결
+5. 감사 로그 또는 변경 이력 보강
 
-### 3단계
+현재 반영 완료:
 
-- 보유 자산, 관심종목, 관심 테마 기반의 가벼운 개인화
+- `Admin / News Ops` private write API
+- `Portfolio / Watchlist` private write API
+- `internal ingest` routes for `news`, `portfolio`, `tickers`
+- `Telegram webhook` route for 창세봇 command ingestion
 
-## 다음 개발 메모
+창세봇 연동용 payload 예시와 권장 구조는 [docs/telegram-assistant-ingest.md](./docs/telegram-assistant-ingest.md)에 정리했습니다.
 
-- 현재 [`src/lib/store/research-store.ts`](./src/lib/store/research-store.ts) 구조는 관계형 스키마와 거의 동일하게 맞춰져 있습니다.
-- 로컬 스토어를 Supabase fetch/mutation으로 바꾸는 작업은 페이지 단위로 점진적으로 진행할 수 있습니다.
-- SQL 스키마는 MVP를 과하게 키우지 않으면서도 이후 확장 여지를 남겨두었습니다.
+## 참고
+
+- 현재 브라우저 로컬 저장은 제거되어, 민감한 리서치 데이터가 localStorage에 남지 않습니다.
+- mock 데이터 fallback은 개발 편의용이며, private API가 정상 동작하면 Supabase 실데이터가 우선 사용됩니다.

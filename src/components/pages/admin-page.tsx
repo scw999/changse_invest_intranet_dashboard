@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { PencilLine, RotateCcw, Save, Trash2 } from "lucide-react";
+import { startTransition, useState } from "react";
+import { PencilLine, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
 
 import { PageIntro } from "@/components/layout/page-intro";
 import {
@@ -33,7 +33,9 @@ import {
   REGIONS,
   SCAN_SLOTS,
   THEME_CATEGORIES,
+  type FollowUpRecord,
   type NewsItem,
+  type ResearchDataset,
   type Theme,
 } from "@/types/research";
 
@@ -45,7 +47,7 @@ type NewsFormState = {
   publishedAt: string;
   scanSlot: (typeof SCAN_SLOTS)[number];
   region: (typeof REGIONS)[number];
-  affectedAssetClasses: string[];
+  affectedAssetClasses: NewsItem["affectedAssetClasses"];
   relatedThemeIds: string[];
   relatedTickerIds: string[];
   marketInterpretation: string;
@@ -116,22 +118,161 @@ function mapNewsItemToForm(item: NewsItem): NewsFormState {
   };
 }
 
+async function readDatasetResponse(response: Response): Promise<ResearchDataset> {
+  const body = (await response.json().catch(() => null)) as
+    | ResearchDataset
+    | { error?: string }
+    | null;
+
+  const isDataset =
+    body &&
+    "themes" in body &&
+    "tickers" in body &&
+    "newsItems" in body &&
+    "followUps" in body &&
+    "portfolioItems" in body &&
+    "preferences" in body;
+
+  if (!response.ok || !isDataset) {
+    const message =
+      body && "error" in body ? body.error || "관리 작업에 실패했습니다." : "관리 작업에 실패했습니다.";
+    throw new Error(message);
+  }
+
+  return body;
+}
+
 export function AdminPage() {
   const dataset = useResearchStore((state) => state);
-  const addNewsItem = useResearchStore((state) => state.addNewsItem);
-  const updateNewsItem = useResearchStore((state) => state.updateNewsItem);
-  const deleteNewsItem = useResearchStore((state) => state.deleteNewsItem);
-  const addTheme = useResearchStore((state) => state.addTheme);
-  const deleteTheme = useResearchStore((state) => state.deleteTheme);
-  const upsertFollowUp = useResearchStore((state) => state.upsertFollowUp);
-  const resetData = useResearchStore((state) => state.resetData);
+  const hydrateDataset = useResearchStore((state) => state.hydrateDataset);
+  const setSyncState = useResearchStore((state) => state.setSyncState);
   const [editingNewsId, setEditingNewsId] = useState<string | null>(null);
   const [newsForm, setNewsForm] = useState<NewsFormState>(getDefaultNewsForm());
   const [themeForm, setThemeForm] = useState<ThemeFormState>(defaultThemeForm);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const resetNewsForm = () => {
     setEditingNewsId(null);
     setNewsForm(getDefaultNewsForm());
+  };
+
+  const applyDataset = (nextDataset: ResearchDataset, message: string) => {
+    startTransition(() => {
+      hydrateDataset(nextDataset, {
+        source: "supabase",
+        message,
+      });
+    });
+  };
+
+  const runMutation = async (url: string, options: RequestInit, successMessage: string) => {
+    setIsSubmitting(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+    setSyncState({
+      syncStatus: "loading",
+      syncMessage: "서버에 변경 사항을 저장하는 중입니다.",
+    });
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          ...(options.headers ?? {}),
+        },
+      });
+      const nextDataset = await readDatasetResponse(response);
+      applyDataset(nextDataset, successMessage);
+      setStatusMessage(successMessage);
+      setSyncState({
+        dataSource: "supabase",
+        syncStatus: "success",
+        syncMessage: successMessage,
+        lastSyncedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "관리 작업에 실패했습니다.";
+      setErrorMessage(message);
+      setSyncState({
+        syncStatus: "error",
+        syncMessage: message,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const refreshDataset = async () => {
+    setIsSubmitting(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch("/api/private/research", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const nextDataset = await readDatasetResponse(response);
+      applyDataset(nextDataset, "Supabase 기준 최신 상태로 새로고침했습니다.");
+      setStatusMessage("Supabase 기준 최신 상태로 새로고침했습니다.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "새로고침에 실패했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleNewsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const payload = {
+      title: newsForm.title.trim(),
+      summary: newsForm.summary.trim(),
+      sourceName: newsForm.sourceName.trim(),
+      sourceUrl: newsForm.sourceUrl.trim(),
+      publishedAt: new Date(newsForm.publishedAt).toISOString(),
+      scanSlot: newsForm.scanSlot,
+      region: newsForm.region,
+      affectedAssetClasses: newsForm.affectedAssetClasses,
+      relatedThemeIds: newsForm.relatedThemeIds,
+      relatedTickerIds: newsForm.relatedTickerIds,
+      marketInterpretation: newsForm.marketInterpretation.trim(),
+      directionalView: newsForm.directionalView,
+      actionIdea: newsForm.actionIdea.trim(),
+      followUpStatus: newsForm.followUpStatus,
+      followUpNote: newsForm.followUpNote.trim(),
+      importance: newsForm.importance,
+    };
+
+    await runMutation(
+      "/api/private/admin/news",
+      {
+        method: editingNewsId ? "PATCH" : "POST",
+        body: JSON.stringify(editingNewsId ? { id: editingNewsId, ...payload } : payload),
+      },
+      editingNewsId ? "뉴스를 수정했습니다." : "뉴스를 등록했습니다.",
+    );
+
+    resetNewsForm();
+  };
+
+  const handleThemeSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    await runMutation(
+      "/api/private/admin/themes",
+      {
+        method: "POST",
+        body: JSON.stringify(themeForm),
+      },
+      "테마를 저장했습니다.",
+    );
+
+    setThemeForm(defaultThemeForm);
   };
 
   return (
@@ -139,84 +280,43 @@ export function AdminPage() {
       <PageIntro
         eyebrow="관리 / 뉴스 운영"
         title="리서치 운영"
-        description="과도하게 복잡하게 만들지 않고도 수기 뉴스 등록, 태그 정리, 팔로업 결과 갱신이 가능하도록 구성한 운영 화면입니다."
+        description="권한이 확인된 관리자만 뉴스, 테마, 팔로업을 서버에 저장할 수 있습니다. 현재 화면의 저장, 수정, 삭제는 모두 private API를 통해 처리됩니다."
         meta={`뉴스 ${dataset.newsItems.length}건 · 테마 ${dataset.themes.length}개`}
       >
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => {
-              resetData();
-              resetNewsForm();
-            }}
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)]"
+            onClick={() => void refreshDataset()}
+            disabled={isSubmitting}
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)] disabled:opacity-60"
           >
-            <RotateCcw className="h-4 w-4" />
-            시드 데이터 초기화
+            <RefreshCw className={`h-4 w-4 ${isSubmitting ? "animate-spin" : ""}`} />
+            서버 기준 새로고침
           </button>
-          <Badge variant="outline">수기 뉴스 등록</Badge>
-          <Badge variant="outline">태그 정리</Badge>
-          <Badge variant="outline">팔로업 업데이트</Badge>
+          <Badge variant="outline">관리자 전용</Badge>
+          <Badge variant="outline">서버 저장</Badge>
+          <Badge variant="outline">Public write 차단</Badge>
         </div>
       </PageIntro>
+
+      {statusMessage ? (
+        <div className="rounded-[22px] border border-[rgba(29,123,96,0.18)] bg-[rgba(29,123,96,0.06)] px-4 py-3 text-sm text-[#1d604f]">
+          {statusMessage}
+        </div>
+      ) : null}
+
+      {errorMessage ? (
+        <div className="rounded-[22px] border border-[rgba(140,45,45,0.18)] bg-[rgba(140,45,45,0.06)] px-4 py-3 text-sm text-[#7a2f2f]">
+          {errorMessage}
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
         <SectionCard
           title={editingNewsId ? "뉴스 수정" : "뉴스 등록"}
-          description="변경 내용은 브라우저 저장소에 바로 반영되므로 MVP 단계에서도 즉시 운영할 수 있습니다."
+          description="저장 즉시 서버에 기록되고, 성공하면 최신 Supabase 데이터셋으로 화면이 다시 동기화됩니다."
         >
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-
-              const payload = {
-                title: newsForm.title.trim(),
-                summary: newsForm.summary.trim(),
-                sourceName: newsForm.sourceName.trim(),
-                sourceUrl: newsForm.sourceUrl.trim(),
-                publishedAt: new Date(newsForm.publishedAt).toISOString(),
-                scanSlot: newsForm.scanSlot,
-                region: newsForm.region,
-                affectedAssetClasses:
-                  newsForm.affectedAssetClasses as NewsItem["affectedAssetClasses"],
-                relatedThemeIds: newsForm.relatedThemeIds,
-                relatedTickerIds: newsForm.relatedTickerIds,
-                marketInterpretation: newsForm.marketInterpretation.trim(),
-                directionalView: newsForm.directionalView,
-                actionIdea: newsForm.actionIdea.trim(),
-                followUpStatus: newsForm.followUpStatus,
-                followUpNote: newsForm.followUpNote.trim(),
-                importance: newsForm.importance,
-              };
-
-              if (editingNewsId) {
-                updateNewsItem(editingNewsId, payload);
-              } else {
-                addNewsItem(payload);
-              }
-
-              if (editingNewsId && newsForm.directionalView !== "Neutral") {
-                upsertFollowUp(editingNewsId, {
-                  status: newsForm.followUpStatus,
-                  resolvedAt:
-                    newsForm.followUpStatus === "Pending" ? null : new Date().toISOString(),
-                  outcomeSummary:
-                    newsForm.followUpStatus === "Pending"
-                      ? "팔로업 검토 대기 상태입니다."
-                      : "뉴스 운영 화면에서 결과를 갱신했습니다.",
-                  resultNote:
-                    newsForm.followUpNote.trim() || "뉴스 운영 화면에서 결과 메모를 갱신했습니다.",
-                  marketImpact:
-                    newsForm.followUpStatus === "Pending"
-                      ? "결과 확인 대기 중입니다."
-                      : "결과 검토를 완료했습니다.",
-                });
-              }
-
-              resetNewsForm();
-            }}
-          >
+          <form className="space-y-4" onSubmit={(event) => void handleNewsSubmit(event)}>
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="제목">
                 <input
@@ -230,9 +330,7 @@ export function AdminPage() {
                 <input
                   required
                   value={newsForm.sourceName}
-                  onChange={(event) =>
-                    setNewsForm({ ...newsForm, sourceName: event.target.value })
-                  }
+                  onChange={(event) => setNewsForm({ ...newsForm, sourceName: event.target.value })}
                   className="field"
                 />
               </Field>
@@ -240,9 +338,7 @@ export function AdminPage() {
                 <input
                   required
                   value={newsForm.sourceUrl}
-                  onChange={(event) =>
-                    setNewsForm({ ...newsForm, sourceUrl: event.target.value })
-                  }
+                  onChange={(event) => setNewsForm({ ...newsForm, sourceUrl: event.target.value })}
                   className="field"
                 />
               </Field>
@@ -251,9 +347,7 @@ export function AdminPage() {
                   required
                   type="datetime-local"
                   value={newsForm.publishedAt}
-                  onChange={(event) =>
-                    setNewsForm({ ...newsForm, publishedAt: event.target.value })
-                  }
+                  onChange={(event) => setNewsForm({ ...newsForm, publishedAt: event.target.value })}
                   className="field"
                 />
               </Field>
@@ -367,7 +461,7 @@ export function AdminPage() {
                 className="field min-h-[110px]"
               />
             </Field>
-            <Field label="대응 아이디어">
+            <Field label="액션 아이디어">
               <textarea
                 required
                 value={newsForm.actionIdea}
@@ -378,9 +472,7 @@ export function AdminPage() {
             <Field label="팔로업 메모">
               <textarea
                 value={newsForm.followUpNote}
-                onChange={(event) =>
-                  setNewsForm({ ...newsForm, followUpNote: event.target.value })
-                }
+                onChange={(event) => setNewsForm({ ...newsForm, followUpNote: event.target.value })}
                 className="field min-h-[100px]"
               />
             </Field>
@@ -395,9 +487,9 @@ export function AdminPage() {
               onToggle={(value) =>
                 setNewsForm({
                   ...newsForm,
-                  affectedAssetClasses: newsForm.affectedAssetClasses.includes(value)
+                  affectedAssetClasses: newsForm.affectedAssetClasses.includes(value as NewsItem["affectedAssetClasses"][number])
                     ? newsForm.affectedAssetClasses.filter((entry) => entry !== value)
-                    : [...newsForm.affectedAssetClasses, value],
+                    : [...newsForm.affectedAssetClasses, value as NewsItem["affectedAssetClasses"][number]],
                 })
               }
             />
@@ -439,17 +531,19 @@ export function AdminPage() {
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                className="inline-flex items-center gap-2 rounded-full bg-[var(--text-strong)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 rounded-full bg-[var(--text-strong)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
               >
                 <Save className="h-4 w-4" />
-                {editingNewsId ? "변경 저장" : "뉴스 등록"}
+                {editingNewsId ? "수정 저장" : "뉴스 등록"}
               </button>
               <button
                 type="button"
                 onClick={resetNewsForm}
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-5 py-3 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)]"
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-5 py-3 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)] disabled:opacity-60"
               >
-                폼 초기화
+                입력 초기화
               </button>
             </div>
           </form>
@@ -457,16 +551,9 @@ export function AdminPage() {
 
         <SectionCard
           title="테마 관리"
-          description="별도 도구 없이 테마를 추가하거나 삭제할 수 있습니다."
+          description="테마는 관리자만 추가/삭제할 수 있으며, 서버 저장 후 즉시 최신 데이터로 갱신됩니다."
         >
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              addTheme(themeForm);
-              setThemeForm(defaultThemeForm);
-            }}
-          >
+          <form className="space-y-4" onSubmit={(event) => void handleThemeSubmit(event)}>
             <Field label="테마명">
               <input
                 required
@@ -523,7 +610,7 @@ export function AdminPage() {
                 </select>
               </Field>
             </div>
-            <Field label="포인트 컬러">
+            <Field label="색상">
               <input
                 value={themeForm.color}
                 onChange={(event) => setThemeForm({ ...themeForm, color: event.target.value })}
@@ -532,9 +619,10 @@ export function AdminPage() {
             </Field>
             <button
               type="submit"
-              className="rounded-full bg-[var(--text-strong)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+              disabled={isSubmitting}
+              className="rounded-full bg-[var(--text-strong)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
             >
-              테마 추가
+              테마 저장
             </button>
           </form>
 
@@ -558,8 +646,18 @@ export function AdminPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => deleteTheme(theme.id)}
-                  className="inline-flex items-center gap-2 rounded-full border border-[rgba(140,45,45,0.2)] px-4 py-2 text-sm font-semibold text-[#8d2d2d] transition hover:bg-[rgba(140,45,45,0.06)]"
+                  disabled={isSubmitting}
+                  onClick={() =>
+                    void runMutation(
+                      "/api/private/admin/themes",
+                      {
+                        method: "DELETE",
+                        body: JSON.stringify({ id: theme.id }),
+                      },
+                      "테마를 삭제했습니다.",
+                    )
+                  }
+                  className="inline-flex items-center gap-2 rounded-full border border-[rgba(140,45,45,0.2)] px-4 py-2 text-sm font-semibold text-[#8d2d2d] transition hover:bg-[rgba(140,45,45,0.06)] disabled:opacity-60"
                 >
                   <Trash2 className="h-4 w-4" />
                   삭제
@@ -572,7 +670,7 @@ export function AdminPage() {
 
       <SectionCard
         title="기존 뉴스 목록"
-        description="이미 저장된 뉴스 항목을 수정하거나 삭제할 수 있습니다."
+        description="기록된 뉴스의 수정과 삭제도 모두 서버 권한 경로를 통해 처리됩니다."
       >
         <div className="space-y-4">
           {dataset.newsItems.map((item) => (
@@ -596,19 +694,32 @@ export function AdminPage() {
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => {
                     setEditingNewsId(item.id);
                     setNewsForm(mapNewsItemToForm(item));
+                    setStatusMessage(null);
+                    setErrorMessage(null);
                   }}
-                  className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)]"
+                  className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)] disabled:opacity-60"
                 >
                   <PencilLine className="h-4 w-4" />
                   수정
                 </button>
                 <button
                   type="button"
-                  onClick={() => deleteNewsItem(item.id)}
-                  className="inline-flex items-center gap-2 rounded-full border border-[rgba(140,45,45,0.2)] px-4 py-2 text-sm font-semibold text-[#8d2d2d] transition hover:bg-[rgba(140,45,45,0.06)]"
+                  disabled={isSubmitting}
+                  onClick={() =>
+                    void runMutation(
+                      "/api/private/admin/news",
+                      {
+                        method: "DELETE",
+                        body: JSON.stringify({ id: item.id }),
+                      },
+                      "뉴스를 삭제했습니다.",
+                    )
+                  }
+                  className="inline-flex items-center gap-2 rounded-full border border-[rgba(140,45,45,0.2)] px-4 py-2 text-sm font-semibold text-[#8d2d2d] transition hover:bg-[rgba(140,45,45,0.06)] disabled:opacity-60"
                 >
                   <Trash2 className="h-4 w-4" />
                   삭제
@@ -621,8 +732,12 @@ export function AdminPage() {
 
       <SectionCard
         title="팔로업 업데이트"
-        description="기존 해석의 결과가 드러나면 상태와 메모를 바로 갱신할 수 있습니다."
+        description="기존 해석의 결과는 별도 서버 경로로 저장되며, 관련 뉴스 상태도 함께 갱신됩니다."
       >
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[rgba(29,123,96,0.18)] bg-[rgba(29,123,96,0.06)] px-4 py-2 text-sm text-[#1d604f]">
+          <ShieldCheck className="h-4 w-4" />
+          관리자 세션이 확인된 요청만 저장됩니다.
+        </div>
         <div className="space-y-4">
           {dataset.followUps.map((record) => {
             const sourceNews = dataset.newsItems.find((item) => item.id === record.newsItemId);
@@ -634,17 +749,22 @@ export function AdminPage() {
             return (
               <FollowUpOpsRow
                 key={record.id}
+                record={record}
                 title={getDisplayNewsItem(sourceNews).title}
-                status={record.status}
-                note={getDisplayFollowUp(record).resultNote}
+                disabled={isSubmitting}
                 onSave={(nextStatus, nextNote) =>
-                  upsertFollowUp(record.newsItemId, {
-                    status: nextStatus,
-                    resolvedAt: nextStatus === "Pending" ? null : new Date().toISOString(),
-                    outcomeSummary: record.outcomeSummary,
-                    resultNote: nextNote,
-                    marketImpact: record.marketImpact,
-                  })
+                  runMutation(
+                    "/api/private/admin/follow-ups",
+                    {
+                      method: "PATCH",
+                      body: JSON.stringify({
+                        newsItemId: record.newsItemId,
+                        status: nextStatus,
+                        resultNote: nextNote,
+                      }),
+                    },
+                    "팔로업을 저장했습니다.",
+                  )
                 }
               />
             );
@@ -713,18 +833,18 @@ function TagSelector({
 }
 
 function FollowUpOpsRow({
+  record,
   title,
-  status,
-  note,
+  disabled,
   onSave,
 }: {
+  record: FollowUpRecord;
   title: string;
-  status: (typeof FOLLOW_UP_STATUSES)[number];
-  note: string;
-  onSave: (status: (typeof FOLLOW_UP_STATUSES)[number], note: string) => void;
+  disabled: boolean;
+  onSave: (status: (typeof FOLLOW_UP_STATUSES)[number], note: string) => Promise<void>;
 }) {
-  const [nextStatus, setNextStatus] = useState(status);
-  const [nextNote, setNextNote] = useState(note);
+  const [nextStatus, setNextStatus] = useState(record.status);
+  const [nextNote, setNextNote] = useState(getDisplayFollowUp(record).resultNote);
 
   return (
     <div className="rounded-[24px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.82)] p-5">
@@ -734,6 +854,7 @@ function FollowUpOpsRow({
       <div className="mt-4 grid gap-4 md:grid-cols-[220px_1fr_auto]">
         <select
           value={nextStatus}
+          disabled={disabled}
           onChange={(event) =>
             setNextStatus(event.target.value as (typeof FOLLOW_UP_STATUSES)[number])
           }
@@ -747,13 +868,15 @@ function FollowUpOpsRow({
         </select>
         <textarea
           value={nextNote}
+          disabled={disabled}
           onChange={(event) => setNextNote(event.target.value)}
           className="field min-h-[110px]"
         />
         <button
           type="button"
-          onClick={() => onSave(nextStatus, nextNote)}
-          className="rounded-full bg-[var(--text-strong)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+          disabled={disabled}
+          onClick={() => void onSave(nextStatus, nextNote)}
+          className="rounded-full bg-[var(--text-strong)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
         >
           저장
         </button>

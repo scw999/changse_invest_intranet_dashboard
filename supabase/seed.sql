@@ -15,25 +15,25 @@ delete from public.themes;
 
 insert into public.themes (id, owner_id, slug, name, description, category, priority, color)
 values
-  ('theme-kr-policy', '11111111-1111-1111-1111-111111111111', 'korea-policy-reset', 'Korea Policy Reset', 'Fiscal support, supplementary budget talk, and domestic policy shifts affecting Korea risk assets.', 'Policy', 'High', '#9f6b2c'),
-  ('theme-rates-path', '11111111-1111-1111-1111-111111111111', 'rates-path', 'Rates Path', 'Central bank communication, inflation prints, and duration positioning across KR and US curves.', 'Macro', 'Critical', '#264b6d'),
-  ('theme-ai-supply', '11111111-1111-1111-1111-111111111111', 'ai-supply-chain', 'AI Supply Chain', 'Capex, compute bottlenecks, and demand read-through across semiconductors and hyperscalers.', 'Sector', 'Critical', '#2e6a64'),
-  ('theme-semi-cycle', '11111111-1111-1111-1111-111111111111', 'semiconductor-cycle', 'Semiconductor Cycle', 'Memory pricing, export momentum, and semiconductor inventory turns.', 'Sector', 'Critical', '#355c7d'),
-  ('theme-fx-defense', '11111111-1111-1111-1111-111111111111', 'fx-defense', 'FX Defense', 'KRW stabilization measures, dollar funding pressure, and intervention-sensitive trades.', 'Risk', 'High', '#4e5f95'),
-  ('theme-safe-havens', '11111111-1111-1111-1111-111111111111', 'safe-haven-flow', 'Safe Haven Flow', 'Treasuries, gold, and defensive positioning when macro conviction softens.', 'Cross-Asset', 'High', '#657a54'),
-  ('theme-defense-capex', '11111111-1111-1111-1111-111111111111', 'defense-capex', 'Defense Capex', 'Defense spending cycles and export upside for Korean aerospace and systems suppliers.', 'Sector', 'Medium', '#4f4c78'),
-  ('theme-risk-appetite', '11111111-1111-1111-1111-111111111111', 'risk-appetite', 'Risk Appetite', 'Cross-asset positioning, leverage conditions, and tactical sentiment swings.', 'Risk', 'Medium', '#6c5b43');
+  ('00000000-0000-0000-0000-000000000101', '11111111-1111-1111-1111-111111111111', 'korea-policy-reset', 'Korea Policy Reset', 'Fiscal support, supplementary budget talk, and domestic policy shifts affecting Korea risk assets.', 'Policy', 'High', '#9f6b2c'),
+  ('00000000-0000-0000-0000-000000000102', '11111111-1111-1111-1111-111111111111', 'rates-path', 'Rates Path', 'Central bank communication, inflation prints, and duration positioning across KR and US curves.', 'Macro', 'Critical', '#264b6d'),
+  ('00000000-0000-0000-0000-000000000103', '11111111-1111-1111-1111-111111111111', 'ai-supply-chain', 'AI Supply Chain', 'Capex, compute bottlenecks, and demand read-through across semiconductors and hyperscalers.', 'Sector', 'Critical', '#2e6a64'),
+  ('00000000-0000-0000-0000-000000000104', '11111111-1111-1111-1111-111111111111', 'semiconductor-cycle', 'Semiconductor Cycle', 'Memory pricing, export momentum, and semiconductor inventory turns.', 'Sector', 'Critical', '#355c7d'),
+  ('00000000-0000-0000-0000-000000000105', '11111111-1111-1111-1111-111111111111', 'fx-defense', 'FX Defense', 'KRW stabilization measures, dollar funding pressure, and intervention-sensitive trades.', 'Risk', 'High', '#4e5f95'),
+  ('00000000-0000-0000-0000-000000000106', '11111111-1111-1111-1111-111111111111', 'safe-haven-flow', 'Safe Haven Flow', 'Treasuries, gold, and defensive positioning when macro conviction softens.', 'Cross-Asset', 'High', '#657a54'),
+  ('00000000-0000-0000-0000-000000000107', '11111111-1111-1111-1111-111111111111', 'defense-capex', 'Defense Capex', 'Defense spending cycles and export upside for Korean aerospace and systems suppliers.', 'Sector', 'Medium', '#4f4c78'),
+  ('00000000-0000-0000-0000-000000000108', '11111111-1111-1111-1111-111111111111', 'risk-appetite', 'Risk Appetite', 'Cross-asset positioning, leverage conditions, and tactical sentiment swings.', 'Risk', 'Medium', '#6c5b43');
 
 insert into public.tickers (id, owner_id, symbol, name, exchange, region, asset_class, note)
 values
-  ('ticker-005930-ks', '11111111-1111-1111-1111-111111111111', '005930.KS', 'Samsung Electronics', 'KRX', 'KR', 'Equities', 'Core Korea semiconductor bellwether and export sensitivity proxy.'),
-  ('ticker-000660-ks', '11111111-1111-1111-1111-111111111111', '000660.KS', 'SK Hynix', 'KRX', 'KR', 'Equities', 'High-beta memory and HBM exposure for AI and cyclical turns.'),
-  ('ticker-nvda', '11111111-1111-1111-1111-111111111111', 'NVDA', 'NVIDIA', 'NASDAQ', 'US', 'Equities', 'Lead AI compute beneficiary and sentiment anchor for growth risk.'),
-  ('ticker-qqq', '11111111-1111-1111-1111-111111111111', 'QQQ', 'Invesco QQQ Trust', 'NASDAQ', 'US', 'ETF', 'Growth and duration-sensitive positioning vehicle.'),
-  ('ticker-tlt', '11111111-1111-1111-1111-111111111111', 'TLT', 'iShares 20+ Year Treasury Bond ETF', 'NASDAQ', 'US', 'ETF', 'Clean duration expression for rates-path calls.'),
-  ('ticker-gld', '11111111-1111-1111-1111-111111111111', 'GLD', 'SPDR Gold Shares', 'NYSE Arca', 'GLOBAL', 'ETF', 'Liquid safe-haven and real-yield hedge expression.'),
-  ('ticker-kb', '11111111-1111-1111-1111-111111111111', '105560.KS', 'KB Financial', 'KRX', 'KR', 'Equities', 'Korean bank proxy for curve steepening and domestic policy support.'),
-  ('ticker-hanwha', '11111111-1111-1111-1111-111111111111', '012450.KS', 'Hanwha Aerospace', 'KRX', 'KR', 'Equities', 'Defense export beneficiary tied to multi-year procurement pipelines.');
+  ('00000000-0000-0000-0000-000000000201', '11111111-1111-1111-1111-111111111111', '005930.KS', 'Samsung Electronics', 'KRX', 'KR', 'Equities', 'Core Korea semiconductor bellwether and export sensitivity proxy.'),
+  ('00000000-0000-0000-0000-000000000202', '11111111-1111-1111-1111-111111111111', '000660.KS', 'SK Hynix', 'KRX', 'KR', 'Equities', 'High-beta memory and HBM exposure for AI and cyclical turns.'),
+  ('00000000-0000-0000-0000-000000000203', '11111111-1111-1111-1111-111111111111', 'NVDA', 'NVIDIA', 'NASDAQ', 'US', 'Equities', 'Lead AI compute beneficiary and sentiment anchor for growth risk.'),
+  ('00000000-0000-0000-0000-000000000204', '11111111-1111-1111-1111-111111111111', 'QQQ', 'Invesco QQQ Trust', 'NASDAQ', 'US', 'ETF', 'Growth and duration-sensitive positioning vehicle.'),
+  ('00000000-0000-0000-0000-000000000205', '11111111-1111-1111-1111-111111111111', 'TLT', 'iShares 20+ Year Treasury Bond ETF', 'NASDAQ', 'US', 'ETF', 'Clean duration expression for rates-path calls.'),
+  ('00000000-0000-0000-0000-000000000206', '11111111-1111-1111-1111-111111111111', 'GLD', 'SPDR Gold Shares', 'NYSE Arca', 'GLOBAL', 'ETF', 'Liquid safe-haven and real-yield hedge expression.'),
+  ('00000000-0000-0000-0000-000000000207', '11111111-1111-1111-1111-111111111111', '105560.KS', 'KB Financial', 'KRX', 'KR', 'Equities', 'Korean bank proxy for curve steepening and domestic policy support.'),
+  ('00000000-0000-0000-0000-000000000208', '11111111-1111-1111-1111-111111111111', '012450.KS', 'Hanwha Aerospace', 'KRX', 'KR', 'Equities', 'Defense export beneficiary tied to multi-year procurement pipelines.');
 
 insert into public.news_items (
   id,
@@ -55,7 +55,7 @@ insert into public.news_items (
 )
 values
   (
-    'news-001',
+    '00000000-0000-0000-0000-000000000301',
     '11111111-1111-1111-1111-111111111111',
     'Korea fiscal support talk revives domestic beta into the morning scan',
     'Local brokers flagged renewed supplementary budget discussion as enough to rotate flows back into domestic cyclicals and broad Korea beta.',
@@ -73,7 +73,7 @@ values
     'High'
   ),
   (
-    'news-002',
+    '00000000-0000-0000-0000-000000000302',
     '11111111-1111-1111-1111-111111111111',
     'US core CPI cooldown eases duration pressure ahead of the New York open',
     'A softer-than-feared inflation read triggered a relief move in long duration while keeping growth leadership intact for now.',
@@ -91,7 +91,7 @@ values
     'Critical'
   ),
   (
-    'news-005',
+    '00000000-0000-0000-0000-000000000305',
     '11111111-1111-1111-1111-111111111111',
     'Hyperscaler capex checks keep AI supply chain leadership intact',
     'Channel checks suggested no meaningful pause in AI infrastructure spend, reinforcing leadership for high-end chips and memory suppliers.',
@@ -109,7 +109,7 @@ values
     'Critical'
   ),
   (
-    'news-007',
+    '00000000-0000-0000-0000-000000000307',
     '11111111-1111-1111-1111-111111111111',
     'Korea early export data surprises on semiconductors and memory pricing',
     'Preliminary shipment data pointed to stronger semiconductor exports, with memory pricing commentary helping high-beta chip names into the close.',
@@ -127,7 +127,7 @@ values
     'Critical'
   ),
   (
-    'news-010',
+    '00000000-0000-0000-0000-000000000310',
     '11111111-1111-1111-1111-111111111111',
     'Europe defense orders broaden supplier read-through for Korea names',
     'Incremental order commentary in Europe strengthened the case for a longer defense upcycle reaching Korean aerospace suppliers.',
@@ -145,7 +145,7 @@ values
     'High'
   ),
   (
-    'news-011',
+    '00000000-0000-0000-0000-000000000311',
     '11111111-1111-1111-1111-111111111111',
     'Gold holds firm as real yields retreat from recent highs',
     'Bullion stayed resilient even as the dollar remained firm, with real-yield easing offsetting the FX headwind.',
@@ -163,7 +163,7 @@ values
     'Medium'
   ),
   (
-    'news-012',
+    '00000000-0000-0000-0000-000000000312',
     '11111111-1111-1111-1111-111111111111',
     'Renewed Treasury auction demand sparks a tactical rebound in duration',
     'Stronger-than-feared auction demand helped long-end Treasuries stabilize after a bruising selloff, reviving a tactical bounce setup.',
@@ -181,7 +181,7 @@ values
     'High'
   ),
   (
-    'news-016',
+    '00000000-0000-0000-0000-000000000316',
     '11111111-1111-1111-1111-111111111111',
     'Korea banks outperform on steeper-curve expectations into the weekly close',
     'Domestic banks outperformed after dealers started pricing a stickier nominal backdrop and better NIM support.',
@@ -201,38 +201,38 @@ values
 
 insert into public.news_item_themes (owner_id, news_item_id, theme_id)
 values
-  ('11111111-1111-1111-1111-111111111111', 'news-001', 'theme-kr-policy'),
-  ('11111111-1111-1111-1111-111111111111', 'news-001', 'theme-risk-appetite'),
-  ('11111111-1111-1111-1111-111111111111', 'news-002', 'theme-rates-path'),
-  ('11111111-1111-1111-1111-111111111111', 'news-002', 'theme-safe-havens'),
-  ('11111111-1111-1111-1111-111111111111', 'news-005', 'theme-ai-supply'),
-  ('11111111-1111-1111-1111-111111111111', 'news-005', 'theme-semi-cycle'),
-  ('11111111-1111-1111-1111-111111111111', 'news-007', 'theme-ai-supply'),
-  ('11111111-1111-1111-1111-111111111111', 'news-007', 'theme-semi-cycle'),
-  ('11111111-1111-1111-1111-111111111111', 'news-010', 'theme-defense-capex'),
-  ('11111111-1111-1111-1111-111111111111', 'news-010', 'theme-risk-appetite'),
-  ('11111111-1111-1111-1111-111111111111', 'news-011', 'theme-safe-havens'),
-  ('11111111-1111-1111-1111-111111111111', 'news-011', 'theme-rates-path'),
-  ('11111111-1111-1111-1111-111111111111', 'news-012', 'theme-rates-path'),
-  ('11111111-1111-1111-1111-111111111111', 'news-012', 'theme-safe-havens'),
-  ('11111111-1111-1111-1111-111111111111', 'news-016', 'theme-rates-path'),
-  ('11111111-1111-1111-1111-111111111111', 'news-016', 'theme-kr-policy');
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000101'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000108'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000102'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000106'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-000000000103'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-000000000104'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000307', '00000000-0000-0000-0000-000000000103'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000307', '00000000-0000-0000-0000-000000000104'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000310', '00000000-0000-0000-0000-000000000107'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000310', '00000000-0000-0000-0000-000000000108'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000311', '00000000-0000-0000-0000-000000000106'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000311', '00000000-0000-0000-0000-000000000102'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000312', '00000000-0000-0000-0000-000000000102'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000312', '00000000-0000-0000-0000-000000000106'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000316', '00000000-0000-0000-0000-000000000102'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000316', '00000000-0000-0000-0000-000000000101');
 
 insert into public.news_item_tickers (owner_id, news_item_id, ticker_id)
 values
-  ('11111111-1111-1111-1111-111111111111', 'news-001', 'ticker-kb'),
-  ('11111111-1111-1111-1111-111111111111', 'news-002', 'ticker-tlt'),
-  ('11111111-1111-1111-1111-111111111111', 'news-002', 'ticker-qqq'),
-  ('11111111-1111-1111-1111-111111111111', 'news-005', 'ticker-nvda'),
-  ('11111111-1111-1111-1111-111111111111', 'news-005', 'ticker-000660-ks'),
-  ('11111111-1111-1111-1111-111111111111', 'news-005', 'ticker-005930-ks'),
-  ('11111111-1111-1111-1111-111111111111', 'news-007', 'ticker-000660-ks'),
-  ('11111111-1111-1111-1111-111111111111', 'news-007', 'ticker-005930-ks'),
-  ('11111111-1111-1111-1111-111111111111', 'news-010', 'ticker-hanwha'),
-  ('11111111-1111-1111-1111-111111111111', 'news-011', 'ticker-gld'),
-  ('11111111-1111-1111-1111-111111111111', 'news-011', 'ticker-tlt'),
-  ('11111111-1111-1111-1111-111111111111', 'news-012', 'ticker-tlt'),
-  ('11111111-1111-1111-1111-111111111111', 'news-016', 'ticker-kb');
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000207'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000205'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000204'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-000000000203'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-000000000202'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-000000000201'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000307', '00000000-0000-0000-0000-000000000202'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000307', '00000000-0000-0000-0000-000000000201'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000310', '00000000-0000-0000-0000-000000000208'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000311', '00000000-0000-0000-0000-000000000206'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000311', '00000000-0000-0000-0000-000000000205'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000312', '00000000-0000-0000-0000-000000000205'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000316', '00000000-0000-0000-0000-000000000207');
 
 insert into public.follow_up_records (
   id,
@@ -246,9 +246,9 @@ insert into public.follow_up_records (
 )
 values
   (
-    'follow-001',
+    '00000000-0000-0000-0000-000000000401',
     '11111111-1111-1111-1111-111111111111',
-    'news-012',
+    '00000000-0000-0000-0000-000000000312',
     'Correct',
     '2026-03-11T17:58:00+09:00',
     'Duration bounced as expected immediately after the auction, then gave back some gains once Fed commentary hardened.',
@@ -256,9 +256,9 @@ values
     'TLT held its first-day rebound and closed above the prior session low.'
   ),
   (
-    'follow-002',
+    '00000000-0000-0000-0000-000000000402',
     '11111111-1111-1111-1111-111111111111',
-    'news-005',
+    '00000000-0000-0000-0000-000000000305',
     'Pending',
     null,
     'Need the next supplier guide and order backlog commentary to judge whether the capex thesis is broadening.',
@@ -266,9 +266,9 @@ values
     'Awaiting outcome.'
   ),
   (
-    'follow-003',
+    '00000000-0000-0000-0000-000000000403',
     '11111111-1111-1111-1111-111111111111',
-    'news-010',
+    '00000000-0000-0000-0000-000000000310',
     'Pending',
     null,
     'The backlog story looks promising, but the next step is checking order timing and margin conversion.',
@@ -276,9 +276,9 @@ values
     'Awaiting outcome.'
   ),
   (
-    'follow-004',
+    '00000000-0000-0000-0000-000000000404',
     '11111111-1111-1111-1111-111111111111',
-    'news-011',
+    '00000000-0000-0000-0000-000000000311',
     'Pending',
     null,
     'Need a second session of follow-through to validate gold as a live hedge rather than a one-day relief move.',
@@ -286,9 +286,9 @@ values
     'Awaiting outcome.'
   ),
   (
-    'follow-005',
+    '00000000-0000-0000-0000-000000000405',
     '11111111-1111-1111-1111-111111111111',
-    'news-016',
+    '00000000-0000-0000-0000-000000000316',
     'Correct',
     '2026-03-10T09:10:00+09:00',
     'Korea banks kept relative strength and cushioned the portfolio while higher-beta names rotated.',
@@ -311,12 +311,12 @@ insert into public.portfolio_items (
   priority
 )
 values
-  ('portfolio-001', '11111111-1111-1111-1111-111111111111', '000660.KS', 'SK Hynix', 'Stock', 'KR', true, false, 16.2, 173000, 'Core AI memory winner. Prefer to add on export-data-confirmed pullbacks.', 'Critical'),
-  ('portfolio-002', '11111111-1111-1111-1111-111111111111', 'NVDA', 'NVIDIA', 'Stock', 'US', true, false, 11.5, 742, 'Long-term compounder, but avoid oversizing after vertical momentum bursts.', 'High'),
-  ('portfolio-003', '11111111-1111-1111-1111-111111111111', 'QQQ', 'Invesco QQQ Trust', 'ETF', 'US', true, false, 18, 503, 'Growth beta anchor. Watch rates sensitivity closely.', 'Medium'),
-  ('portfolio-004', '11111111-1111-1111-1111-111111111111', 'TLT', 'iShares 20+ Year Treasury Bond ETF', 'ETF', 'US', false, true, null, null, 'Waiting for a cleaner duration entry after Fed pushback.', 'High'),
-  ('portfolio-005', '11111111-1111-1111-1111-111111111111', 'GLD', 'SPDR Gold Shares', 'ETF', 'GLOBAL', false, true, null, null, 'Potential macro hedge if growth breadth narrows.', 'Medium'),
-  ('portfolio-006', '11111111-1111-1111-1111-111111111111', '012450.KS', 'Hanwha Aerospace', 'Stock', 'KR', false, true, null, null, 'High-conviction watchlist name for defense-capex theme.', 'High');
+  ('00000000-0000-0000-0000-000000000501', '11111111-1111-1111-1111-111111111111', '000660.KS', 'SK Hynix', 'Stock', 'KR', true, false, 16.2, 173000, 'Core AI memory winner. Prefer to add on export-data-confirmed pullbacks.', 'Critical'),
+  ('00000000-0000-0000-0000-000000000502', '11111111-1111-1111-1111-111111111111', 'NVDA', 'NVIDIA', 'Stock', 'US', true, false, 11.5, 742, 'Long-term compounder, but avoid oversizing after vertical momentum bursts.', 'High'),
+  ('00000000-0000-0000-0000-000000000503', '11111111-1111-1111-1111-111111111111', 'QQQ', 'Invesco QQQ Trust', 'ETF', 'US', true, false, 18, 503, 'Growth beta anchor. Watch rates sensitivity closely.', 'Medium'),
+  ('00000000-0000-0000-0000-000000000504', '11111111-1111-1111-1111-111111111111', 'TLT', 'iShares 20+ Year Treasury Bond ETF', 'ETF', 'US', false, true, null, null, 'Waiting for a cleaner duration entry after Fed pushback.', 'High'),
+  ('00000000-0000-0000-0000-000000000505', '11111111-1111-1111-1111-111111111111', 'GLD', 'SPDR Gold Shares', 'ETF', 'GLOBAL', false, true, null, null, 'Potential macro hedge if growth breadth narrows.', 'Medium'),
+  ('00000000-0000-0000-0000-000000000506', '11111111-1111-1111-1111-111111111111', '012450.KS', 'Hanwha Aerospace', 'Stock', 'KR', false, true, null, null, 'High-conviction watchlist name for defense-capex theme.', 'High');
 
 insert into public.user_preferences (
   owner_id,
@@ -338,9 +338,9 @@ values
 
 insert into public.user_theme_interests (owner_id, theme_id, priority)
 values
-  ('11111111-1111-1111-1111-111111111111', 'theme-ai-supply', 'Critical'),
-  ('11111111-1111-1111-1111-111111111111', 'theme-semi-cycle', 'Critical'),
-  ('11111111-1111-1111-1111-111111111111', 'theme-rates-path', 'High'),
-  ('11111111-1111-1111-1111-111111111111', 'theme-fx-defense', 'High');
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000103', 'Critical'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000104', 'Critical'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000102', 'High'),
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000105', 'High');
 
 commit;

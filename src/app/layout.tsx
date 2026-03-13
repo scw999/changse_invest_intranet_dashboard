@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Newsreader, Noto_Sans_KR } from "next/font/google";
 
-import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
 
 const notoSansKr = Noto_Sans_KR({
@@ -30,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={`${notoSansKr.variable} ${newsreader.variable}`}>
-        <AppShell>{children}</AppShell>
+        {children}
       </body>
     </html>
   );

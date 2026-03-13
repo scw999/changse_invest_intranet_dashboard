@@ -15,6 +15,7 @@ import {
 
 import { ResearchBootstrap } from "@/components/layout/research-bootstrap";
 import { SyncStatusBanner } from "@/components/layout/sync-status-banner";
+import type { AppViewer } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -27,22 +28,28 @@ const navItems = [
   { href: "/portfolio", label: "포트폴리오", icon: WalletCards },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  viewer,
+}: {
+  children: React.ReactNode;
+  viewer: AppViewer;
+}) {
   const pathname = usePathname();
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1700px] gap-4 px-3 py-3 md:gap-6 md:px-6 md:py-6">
       <ResearchBootstrap />
+
       <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[290px] shrink-0 flex-col rounded-[34px] border border-[var(--border-soft)] bg-[rgba(15,27,45,0.94)] p-6 text-white shadow-[0_32px_90px_rgba(7,17,31,0.28)] lg:flex">
         <div>
-          <p className="text-xs font-semibold tracking-[0.24em] text-white/55">
-            창세인베스트
-          </p>
+          <p className="text-xs font-semibold tracking-[0.24em] text-white/55">창세인베스트</p>
           <h1 className="mt-3 font-[family:var(--font-display)] text-3xl leading-tight">
             창세인베스트 인트라 시스템
           </h1>
           <p className="mt-4 text-sm leading-6 text-white/72">
-            시장 뉴스, 전망 기록, 후속 검증, 포트폴리오 맥락을 한 화면에서 다루는 개인 리서치 운영 대시보드입니다.
+            비공개 시장 리서치 메모, 전망 기록, 후속 점검을 한 화면에서 운영하는 개인 연구
+            대시보드입니다.
           </p>
         </div>
 
@@ -71,8 +78,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="mt-auto rounded-[26px] border border-white/10 bg-[rgba(255,255,255,0.06)] p-5">
+          <div className="mb-4 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.05)] p-4">
+            <p className="text-xs font-semibold tracking-[0.18em] text-white/55 uppercase">
+              Private Viewer
+            </p>
+            <p className="mt-2 text-sm font-semibold text-white">{viewer.email}</p>
+            <form action="/auth/sign-out" method="post" className="mt-3">
+              <button
+                type="submit"
+                className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/72 transition hover:bg-[rgba(255,255,255,0.08)] hover:text-white"
+              >
+                로그아웃
+              </button>
+            </form>
+          </div>
+
           <p className="text-xs font-semibold tracking-[0.18em] text-white/55 uppercase">
-            일일 스캔 슬롯
+            일일 업데이트 슬롯
           </p>
           <div className="mt-4 flex gap-2">
             {["09", "13", "18", "22"].map((slot) => (
@@ -86,12 +108,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </div>
           <div className="mt-4 rounded-2xl border border-[rgba(200,157,97,0.25)] bg-[rgba(200,157,97,0.08)] p-4 text-sm leading-6 text-white/78">
-            현재는 시드 데이터와 브라우저 저장 기반 MVP입니다. 다음 단계에서 같은 구조를 Supabase CRUD로 자연스럽게 연결할 수 있습니다.
+            현재 앱은 서버에서 권한을 확인한 뒤에만 리서치 데이터를 불러오는 private MVP입니다.
+            실제 CRUD는 다음 단계에서 서버 trusted write 경로로 연결합니다.
           </div>
           <div className="mt-4 rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-white/74">
             <div className="flex items-center gap-2 font-semibold text-white/88">
               <Bell className="h-4 w-4" />
-              데이터 소스 상태
+              데이터 상태
             </div>
             <div className="mt-3">
               <SyncStatusBanner />
@@ -110,9 +133,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               창세인베스트 인트라 시스템
             </p>
           </div>
-          <div className="rounded-full bg-[rgba(23,42,70,0.08)] px-2.5 py-1 text-[11px] font-semibold tracking-[0.08em] text-[var(--text-muted)]">
-            1단계
-          </div>
+          <form action="/auth/sign-out" method="post">
+            <button className="rounded-full bg-[rgba(23,42,70,0.08)] px-3 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-[var(--text-muted)]">
+              로그아웃
+            </button>
+          </form>
         </header>
 
         <main className="flex-1 space-y-4 md:space-y-6">

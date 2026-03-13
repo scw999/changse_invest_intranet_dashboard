@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 
-import { fetchResearchDatasetFromSupabase } from "@/lib/supabase/research";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { useResearchStore } from "@/lib/store/research-store";
 
@@ -25,11 +24,20 @@ export function ResearchBootstrap() {
 
       setSyncState({
         syncStatus: "loading",
-        syncMessage: "Supabase에서 데이터를 확인하는 중입니다.",
+        syncMessage: "Supabase에서 최신 데이터를 확인하는 중입니다.",
       });
 
       try {
-        const dataset = await fetchResearchDatasetFromSupabase();
+        const response = await fetch("/api/private/research", {
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Private research API request failed.");
+        }
+
+        const dataset = await response.json();
 
         if (!active) {
           return;
