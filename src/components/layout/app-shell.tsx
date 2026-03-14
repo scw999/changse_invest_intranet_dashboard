@@ -59,11 +59,11 @@ export function AppShell({
               <div className="flex items-center gap-4">
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[24px] bg-[rgba(255,255,255,0.95)] shadow-[0_18px_40px_rgba(7,17,31,0.18)]">
                   <Image
-                    src="/icon.svg"
+                    src="/changse-logo.png"
                     alt="창세인베스트 로고"
-                    width={56}
-                    height={56}
-                    className="h-14 w-14"
+                    width={140}
+                    height={140}
+                    className="h-auto w-14"
                     priority
                   />
                 </div>
@@ -163,11 +163,11 @@ export function AppShell({
             <Link href="/" className="flex min-w-0 items-center gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[rgba(255,255,255,0.98)] shadow-[0_10px_24px_rgba(16,29,46,0.08)]">
                 <Image
-                  src="/icon.svg"
+                  src="/changse-logo.png"
                   alt="창세인베스트 로고"
-                  width={32}
-                  height={32}
-                  className="h-8 w-8"
+                  width={84}
+                  height={84}
+                  className="h-auto w-9"
                   priority
                 />
               </div>
