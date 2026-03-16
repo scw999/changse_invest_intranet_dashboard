@@ -17,10 +17,14 @@ import { groupById } from "@/lib/selectors";
 import { useResearchStore } from "@/lib/store/research-store";
 
 export function TickerDetailPage({ symbol }: { symbol: string }) {
-  const dataset = useResearchStore((state) => state);
-  const ticker = dataset.tickers.find((entry) => entry.symbol === decodeURIComponent(symbol));
-  const themeMap = groupById(dataset.themes);
-  const tickerMap = groupById(dataset.tickers);
+  const newsItems = useResearchStore((state) => state.newsItems);
+  const themes = useResearchStore((state) => state.themes);
+  const tickers = useResearchStore((state) => state.tickers);
+  const followUps = useResearchStore((state) => state.followUps);
+  const portfolioItems = useResearchStore((state) => state.portfolioItems);
+  const ticker = tickers.find((entry) => entry.symbol === decodeURIComponent(symbol));
+  const themeMap = groupById(themes);
+  const tickerMap = groupById(tickers);
 
   if (!ticker) {
     return (
@@ -32,11 +36,11 @@ export function TickerDetailPage({ symbol }: { symbol: string }) {
   }
 
   const displayTicker = getDisplayTicker(ticker);
-  const relatedNews = dataset.newsItems.filter((item) => item.relatedTickerIds.includes(ticker.id));
-  const relatedFollowUps = dataset.followUps.filter((record) =>
+  const relatedNews = newsItems.filter((item) => item.relatedTickerIds.includes(ticker.id));
+  const relatedFollowUps = followUps.filter((record) =>
     relatedNews.some((item) => item.id === record.newsItemId),
   );
-  const portfolioEntry = dataset.portfolioItems.find((item) => item.symbol === ticker.symbol);
+  const portfolioEntry = portfolioItems.find((item) => item.symbol === ticker.symbol);
 
   return (
     <div className="space-y-6">

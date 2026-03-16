@@ -22,11 +22,14 @@ import { useResearchStore } from "@/lib/store/research-store";
 import { formatLongDate, formatPublishedAt } from "@/lib/utils";
 
 export function NewsDetailPage({ id }: { id: string }) {
-  const dataset = useResearchStore((state) => state);
-  const item = dataset.newsItems.find((entry) => entry.id === id);
-  const themeMap = groupById(dataset.themes);
-  const tickerMap = groupById(dataset.tickers);
-  const followUp = dataset.followUps.find((entry) => entry.newsItemId === id);
+  const newsItems = useResearchStore((state) => state.newsItems);
+  const themes = useResearchStore((state) => state.themes);
+  const tickers = useResearchStore((state) => state.tickers);
+  const followUps = useResearchStore((state) => state.followUps);
+  const item = newsItems.find((entry) => entry.id === id);
+  const themeMap = groupById(themes);
+  const tickerMap = groupById(tickers);
+  const followUp = followUps.find((entry) => entry.newsItemId === id);
 
   if (!item) {
     return (

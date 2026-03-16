@@ -16,10 +16,13 @@ import { groupById } from "@/lib/selectors";
 import { useResearchStore } from "@/lib/store/research-store";
 
 export function ThemeDetailPage({ slug }: { slug: string }) {
-  const dataset = useResearchStore((state) => state);
-  const theme = dataset.themes.find((entry) => entry.slug === slug);
-  const tickerMap = groupById(dataset.tickers);
-  const themeMap = groupById(dataset.themes);
+  const newsItems = useResearchStore((state) => state.newsItems);
+  const themes = useResearchStore((state) => state.themes);
+  const tickers = useResearchStore((state) => state.tickers);
+  const followUps = useResearchStore((state) => state.followUps);
+  const theme = themes.find((entry) => entry.slug === slug);
+  const tickerMap = groupById(tickers);
+  const themeMap = groupById(themes);
 
   if (!theme) {
     return (
@@ -31,11 +34,11 @@ export function ThemeDetailPage({ slug }: { slug: string }) {
   }
 
   const displayTheme = getDisplayTheme(theme);
-  const relatedNews = dataset.newsItems.filter((item) => item.relatedThemeIds.includes(theme.id));
-  const relatedFollowUps = dataset.followUps.filter((record) =>
+  const relatedNews = newsItems.filter((item) => item.relatedThemeIds.includes(theme.id));
+  const relatedFollowUps = followUps.filter((record) =>
     relatedNews.some((item) => item.id === record.newsItemId),
   );
-  const relatedTickers = dataset.tickers.filter((ticker) =>
+  const relatedTickers = tickers.filter((ticker) =>
     relatedNews.some((item) => item.relatedTickerIds.includes(ticker.id)),
   );
 

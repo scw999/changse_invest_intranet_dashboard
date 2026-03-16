@@ -168,7 +168,10 @@ async function readDatasetResponse(response: Response): Promise<ResearchDataset>
 }
 
 export function AdminPage() {
-  const dataset = useResearchStore((state) => state);
+  const newsItems = useResearchStore((state) => state.newsItems);
+  const themes = useResearchStore((state) => state.themes);
+  const tickers = useResearchStore((state) => state.tickers);
+  const followUps = useResearchStore((state) => state.followUps);
   const hydrateDataset = useResearchStore((state) => state.hydrateDataset);
   const setSyncState = useResearchStore((state) => state.setSyncState);
   const [editingNewsId, setEditingNewsId] = useState<string | null>(null);
@@ -324,7 +327,7 @@ export function AdminPage() {
         eyebrow="관리 / 뉴스 운영"
         title="리서치 운영"
         description="권한이 확인된 관리자만 뉴스, 테마, 팔로업을 서버에 저장할 수 있습니다. 현재 화면의 저장, 수정, 삭제는 모두 private API를 통해 처리됩니다."
-        meta={`뉴스 ${dataset.newsItems.length}건 · 테마 ${dataset.themes.length}개`}
+        meta={`뉴스 ${newsItems.length}건 · 테마 ${themes.length}개`}
       >
         <div className="flex flex-wrap gap-2">
           <button
@@ -617,7 +620,7 @@ export function AdminPage() {
 
             <TagSelector
               label="테마"
-              options={dataset.themes.map((theme) => ({
+              options={themes.map((theme) => ({
                 label: getDisplayTheme(theme).name,
                 value: theme.id,
               }))}
@@ -634,7 +637,7 @@ export function AdminPage() {
 
             <TagSelector
               label="티커"
-              options={dataset.tickers.map((ticker) => ({
+              options={tickers.map((ticker) => ({
                 label: ticker.symbol,
                 value: ticker.id,
               }))}
@@ -748,7 +751,7 @@ export function AdminPage() {
           </form>
 
           <div className="mt-6 space-y-3">
-            {dataset.themes.map((theme) => (
+            {themes.map((theme) => (
               <div
                 key={theme.id}
                 className="flex items-start justify-between gap-3 rounded-[22px] border border-[var(--border-soft)] bg-[rgba(243,239,231,0.72)] p-4"
@@ -794,7 +797,7 @@ export function AdminPage() {
         description="기록된 뉴스의 수정과 삭제도 모두 서버 권한 경로를 통해 처리됩니다."
       >
         <div className="space-y-4">
-          {dataset.newsItems.map((item) => (
+          {newsItems.map((item) => (
             <div
               key={item.id}
               className="rounded-[24px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.82)] p-5"
@@ -861,8 +864,8 @@ export function AdminPage() {
           관리자 세션이 확인된 요청만 저장됩니다.
         </div>
         <div className="space-y-4">
-          {dataset.followUps.map((record) => {
-            const sourceNews = dataset.newsItems.find((item) => item.id === record.newsItemId);
+          {followUps.map((record) => {
+            const sourceNews = newsItems.find((item) => item.id === record.newsItemId);
 
             if (!sourceNews) {
               return null;

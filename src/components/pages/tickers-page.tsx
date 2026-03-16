@@ -15,18 +15,24 @@ import { useResearchStore } from "@/lib/store/research-store";
 import { ASSET_CLASSES, REGIONS } from "@/types/research";
 
 export function TickersPage() {
-  const dataset = useResearchStore((state) => state);
+  const newsItems = useResearchStore((state) => state.newsItems);
+  const allTickers = useResearchStore((state) => state.tickers);
+  const themes = useResearchStore((state) => state.themes);
+  const followUps = useResearchStore((state) => state.followUps);
+  const portfolioItems = useResearchStore((state) => state.portfolioItems);
+  const preferences = useResearchStore((state) => state.preferences);
+  const dataset = { newsItems, themes, tickers: allTickers, followUps, portfolioItems, preferences };
   const [search, setSearch] = useState("");
   const [region, setRegion] = useState<"all" | (typeof REGIONS)[number]>("all");
   const [assetClass, setAssetClass] = useState<"all" | (typeof ASSET_CLASSES)[number]>("all");
   const trackedSymbols = new Map(
-    dataset.portfolioItems.map((item) => [
+    portfolioItems.map((item) => [
       item.symbol,
       item.isHolding ? "보유" : item.isWatchlist ? "관심" : "",
     ]),
   );
 
-  const tickers = dataset.tickers.filter((ticker) => {
+  const tickers = allTickers.filter((ticker) => {
     if (region !== "all" && ticker.region !== region) {
       return false;
     }
@@ -52,7 +58,7 @@ export function TickersPage() {
         eyebrow="티커"
         title="추적 티커 유니버스"
         description="각 티커를 뉴스 흐름, 테마, 팔로업 결과와 함께 묶어 두면 아이디어가 흩어지지 않고 종목별 문맥이 살아납니다."
-        meta={`총 ${dataset.tickers.length}개 티커`}
+        meta={`총 ${allTickers.length}개 티커`}
       >
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">보유 여부 반영</Badge>

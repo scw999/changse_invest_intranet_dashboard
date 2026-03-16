@@ -15,14 +15,20 @@ import { useResearchStore } from "@/lib/store/research-store";
 import { THEME_CATEGORIES } from "@/types/research";
 
 export function ThemesPage() {
-  const dataset = useResearchStore((state) => state);
+  const newsItems = useResearchStore((state) => state.newsItems);
+  const allThemes = useResearchStore((state) => state.themes);
+  const tickers = useResearchStore((state) => state.tickers);
+  const followUps = useResearchStore((state) => state.followUps);
+  const portfolioItems = useResearchStore((state) => state.portfolioItems);
+  const preferences = useResearchStore((state) => state.preferences);
+  const dataset = { newsItems, themes: allThemes, tickers, followUps, portfolioItems, preferences };
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<"all" | (typeof THEME_CATEGORIES)[number]>("all");
   const [priority, setPriority] = useState<"all" | "Critical" | "High" | "Medium" | "Low">(
     "all",
   );
 
-  const themes = dataset.themes.filter((theme) => {
+  const themes = allThemes.filter((theme) => {
     if (category !== "all" && theme.category !== category) {
       return false;
     }
@@ -47,7 +53,7 @@ export function ThemesPage() {
         eyebrow="테마"
         title="테마 맵"
         description="정책, 매크로, 섹터, 크로스에셋 리스크를 테마 단위로 묶어두면 흩어진 뉴스가 장기적인 리서치 기억으로 남습니다."
-        meta={`총 ${dataset.themes.length}개 테마`}
+        meta={`총 ${allThemes.length}개 테마`}
       >
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">테마 상세 페이지</Badge>

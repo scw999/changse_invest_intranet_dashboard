@@ -1,10 +1,13 @@
 "use client";
 
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
 import { cn } from "@/lib/utils";
+
+const plugins = [remarkGfm, remarkBreaks];
 
 type RichTextProps = {
   content?: string | null;
@@ -12,7 +15,11 @@ type RichTextProps = {
   compact?: boolean;
 };
 
-export function RichText({ content, className, compact = false }: RichTextProps) {
+export const RichText = memo(function RichText({
+  content,
+  className,
+  compact = false,
+}: RichTextProps) {
   if (!content || !content.trim()) {
     return null;
   }
@@ -24,9 +31,7 @@ export function RichText({ content, className, compact = false }: RichTextProps)
         className,
       )}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-        {content}
-      </ReactMarkdown>
+      <ReactMarkdown remarkPlugins={plugins}>{content}</ReactMarkdown>
     </div>
   );
-}
+});

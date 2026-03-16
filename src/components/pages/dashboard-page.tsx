@@ -29,20 +29,26 @@ import { formatLongDate } from "@/lib/utils";
 import { CONTENT_TYPES } from "@/types/research";
 
 export function DashboardPage() {
-  const dataset = useResearchStore((state) => state);
-  const themeMap = groupById(dataset.themes);
-  const tickerMap = groupById(dataset.tickers);
+  const newsItems = useResearchStore((state) => state.newsItems);
+  const themes = useResearchStore((state) => state.themes);
+  const tickers = useResearchStore((state) => state.tickers);
+  const followUps = useResearchStore((state) => state.followUps);
+  const portfolioItems = useResearchStore((state) => state.portfolioItems);
+  const preferences = useResearchStore((state) => state.preferences);
+  const dataset = { newsItems, themes, tickers, followUps, portfolioItems, preferences };
+  const themeMap = groupById(themes);
+  const tickerMap = groupById(tickers);
 
-  const todayNews = getTodayNews(dataset.newsItems);
-  const latestDate = getLatestNewsDate(dataset.newsItems);
+  const todayNews = getTodayNews(newsItems);
+  const latestDate = getLatestNewsDate(newsItems);
   const slotBuckets = getSlotBuckets(todayNews);
   const personalizedNews = getPersonalizedNews(
     todayNews,
-    dataset.tickers,
-    dataset.portfolioItems,
-    dataset.preferences,
+    tickers,
+    portfolioItems,
+    preferences,
   ).slice(0, 4);
-  const recentFollowUps = [...dataset.followUps]
+  const recentFollowUps = [...followUps]
     .sort((left, right) => {
       if (!left.resolvedAt && right.resolvedAt) {
         return -1;
@@ -55,16 +61,16 @@ export function DashboardPage() {
       return (right.resolvedAt ?? "").localeCompare(left.resolvedAt ?? "");
     })
     .slice(0, 4);
-  const themePulse = [...dataset.themes]
+  const themePulse = [...themes]
     .sort(
       (left, right) =>
         getThemeCoverage(dataset, right).newsCount - getThemeCoverage(dataset, left).newsCount,
     )
     .slice(0, 3);
-  const followUpSummary = getFollowUpSummary(dataset.followUps);
+  const followUpSummary = getFollowUpSummary(followUps);
   const latestByType = CONTENT_TYPES.map((type) => ({
     type,
-    items: getContentTypeItems(dataset.newsItems, type).slice(0, 3),
+    items: getContentTypeItems(newsItems, type).slice(0, 3),
   }));
 
   return (
@@ -77,7 +83,7 @@ export function DashboardPage() {
       >
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">드릴다운 대시보드</Badge>
-          {dataset.preferences.favoriteSlots.map((slot) => (
+          {preferences.favoriteSlots.map((slot) => (
             <Badge key={slot}>{`${slot}:00 슬롯`}</Badge>
           ))}
         </div>
@@ -313,7 +319,7 @@ export function DashboardPage() {
         >
           <div className="space-y-5">
             {recentFollowUps.map((record) => {
-              const sourceNews = dataset.newsItems.find((item) => item.id === record.newsItemId);
+              const sourceNews = newsItems.find((item) => item.id === record.newsItemId);
 
               if (!sourceNews) {
                 return null;

@@ -69,7 +69,9 @@ export function PortfolioPage() {
   const viewer = useViewer();
   const isReadOnly = viewer.isGuest || !viewer.isAdmin;
 
-  const dataset = useResearchStore((state) => state);
+  const themes = useResearchStore((state) => state.themes);
+  const portfolioItems = useResearchStore((state) => state.portfolioItems);
+  const preferences = useResearchStore((state) => state.preferences);
   const hydrateDataset = useResearchStore((state) => state.hydrateDataset);
   const setSyncState = useResearchStore((state) => state.setSyncState);
 
@@ -78,8 +80,8 @@ export function PortfolioPage() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const holdings = dataset.portfolioItems.filter((item) => item.isHolding);
-  const watchlist = dataset.portfolioItems.filter((item) => item.isWatchlist);
+  const holdings = portfolioItems.filter((item) => item.isHolding);
+  const watchlist = portfolioItems.filter((item) => item.isWatchlist);
 
   const applyDataset = (nextDataset: ResearchDataset, message: string) => {
     startTransition(() => {
@@ -163,12 +165,12 @@ export function PortfolioPage() {
       {
         method: "PATCH",
         body: JSON.stringify({
-          timezone: dataset.preferences.timezone,
-          preferredSort: patch.preferredSort ?? dataset.preferences.preferredSort,
-          favoriteSlots: patch.favoriteSlots ?? dataset.preferences.favoriteSlots,
-          defaultRegions: patch.defaultRegions ?? dataset.preferences.defaultRegions,
-          interestThemeIds: patch.interestThemeIds ?? dataset.preferences.interestThemeIds,
-          compactMode: patch.compactMode ?? dataset.preferences.compactMode,
+          timezone: preferences.timezone,
+          preferredSort: patch.preferredSort ?? preferences.preferredSort,
+          favoriteSlots: patch.favoriteSlots ?? preferences.favoriteSlots,
+          defaultRegions: patch.defaultRegions ?? preferences.defaultRegions,
+          interestThemeIds: patch.interestThemeIds ?? preferences.interestThemeIds,
+          compactMode: patch.compactMode ?? preferences.compactMode,
         }),
       },
       "포트폴리오 기본 설정을 저장했습니다.",
@@ -176,29 +178,29 @@ export function PortfolioPage() {
   };
 
   const toggleThemeInterest = async (themeId: string) => {
-    const exists = dataset.preferences.interestThemeIds.includes(themeId);
+    const exists = preferences.interestThemeIds.includes(themeId);
     await updatePreferences({
       interestThemeIds: exists
-        ? dataset.preferences.interestThemeIds.filter((entry) => entry !== themeId)
-        : [...dataset.preferences.interestThemeIds, themeId],
+        ? preferences.interestThemeIds.filter((entry) => entry !== themeId)
+        : [...preferences.interestThemeIds, themeId],
     });
   };
 
   const toggleFavoriteSlot = async (slot: (typeof SCAN_SLOTS)[number]) => {
-    const exists = dataset.preferences.favoriteSlots.includes(slot);
+    const exists = preferences.favoriteSlots.includes(slot);
     await updatePreferences({
       favoriteSlots: exists
-        ? dataset.preferences.favoriteSlots.filter((entry) => entry !== slot)
-        : [...dataset.preferences.favoriteSlots, slot],
+        ? preferences.favoriteSlots.filter((entry) => entry !== slot)
+        : [...preferences.favoriteSlots, slot],
     });
   };
 
   const toggleDefaultRegion = async (region: (typeof REGIONS)[number]) => {
-    const exists = dataset.preferences.defaultRegions.includes(region);
+    const exists = preferences.defaultRegions.includes(region);
     await updatePreferences({
       defaultRegions: exists
-        ? dataset.preferences.defaultRegions.filter((entry) => entry !== region)
-        : [...dataset.preferences.defaultRegions, region],
+        ? preferences.defaultRegions.filter((entry) => entry !== region)
+        : [...preferences.defaultRegions, region],
     });
   };
 
@@ -212,7 +214,7 @@ export function PortfolioPage() {
             ? "게스트는 읽기 전용으로 데이터만 볼 수 있습니다. 수정은 관리자 로그인 후 가능하며, 실제 운영 입력은 창세봇과 internal API 중심으로 처리됩니다."
             : "관리자만 private API를 통해 수정할 수 있습니다. 실제 운영에서는 텔레그램의 창세봇이 같은 내부 경로를 호출해 데이터를 채우는 흐름을 기본으로 둡니다."
         }
-        meta={`총 ${dataset.portfolioItems.length}개 자산 추적 중`}
+        meta={`총 ${portfolioItems.length}개 자산 추적 중`}
       >
         <div className="flex flex-wrap gap-2">
           <button
@@ -291,15 +293,15 @@ export function PortfolioPage() {
         />
         <StatCard
           label="관심 테마"
-          value={String(dataset.preferences.interestThemeIds.length)}
+          value={String(preferences.interestThemeIds.length)}
           description="개인 relevance 계산에 반영될 관심 테마 수입니다."
           accent="linear-gradient(90deg, #355c7d, #6d8fa3)"
         />
         <StatCard
           label="기본 지역"
           value={
-            dataset.preferences.defaultRegions.length > 0
-              ? dataset.preferences.defaultRegions.map((entry) => regionLabels[entry]).join(" / ")
+            preferences.defaultRegions.length > 0
+              ? preferences.defaultRegions.map((entry) => regionLabels[entry]).join(" / ")
               : "미설정"
           }
           description="대시보드에서 기본 강조하는 지역 범위입니다."
@@ -317,7 +319,7 @@ export function PortfolioPage() {
             {isReadOnly ? "게스트는 읽기 전용" : "관리자와 보조 시스템만 쓰기 가능"}
           </div>
           <div className="space-y-5">
-            {dataset.portfolioItems.map((item) => (
+            {portfolioItems.map((item) => (
               <div key={item.id} className="space-y-3">
                 <PortfolioCard item={item} />
                 {!isReadOnly ? (
@@ -519,8 +521,8 @@ export function PortfolioPage() {
           description="개인 relevance 계산과 우선순위 반영에 쓰이는 관심 테마입니다."
         >
           <div className="flex flex-wrap gap-2">
-            {dataset.themes.map((theme) => {
-              const active = dataset.preferences.interestThemeIds.includes(theme.id);
+            {themes.map((theme) => {
+              const active = preferences.interestThemeIds.includes(theme.id);
 
               return (
                 <button
@@ -548,7 +550,7 @@ export function PortfolioPage() {
           <div className="space-y-6">
             <Field label="기본 정렬">
               <select
-                value={dataset.preferences.preferredSort}
+                value={preferences.preferredSort}
                 disabled={isSubmitting || isReadOnly}
                 onChange={(event) =>
                   void updatePreferences({
@@ -571,7 +573,7 @@ export function PortfolioPage() {
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {SCAN_SLOTS.map((slot) => {
-                  const active = dataset.preferences.favoriteSlots.includes(slot);
+                  const active = preferences.favoriteSlots.includes(slot);
 
                   return (
                     <button
@@ -598,7 +600,7 @@ export function PortfolioPage() {
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {REGIONS.map((entry) => {
-                  const active = dataset.preferences.defaultRegions.includes(entry);
+                  const active = preferences.defaultRegions.includes(entry);
 
                   return (
                     <button
@@ -622,7 +624,7 @@ export function PortfolioPage() {
             <label className="inline-flex items-center gap-3 rounded-[22px] border border-[var(--border-strong)] px-4 py-3 text-sm text-[var(--text-muted)]">
               <input
                 type="checkbox"
-                checked={dataset.preferences.compactMode}
+                checked={preferences.compactMode}
                 disabled={isSubmitting || isReadOnly}
                 onChange={(event) => void updatePreferences({ compactMode: event.target.checked })}
               />

@@ -18,9 +18,11 @@ import { useResearchStore } from "@/lib/store/research-store";
 import { FOLLOW_UP_STATUSES, REGIONS } from "@/types/research";
 
 export function FollowUpPage() {
-  const dataset = useResearchStore((state) => state);
-  const tickerMap = groupById(dataset.tickers);
-  const followUpSummary = getFollowUpSummary(dataset.followUps);
+  const newsItems = useResearchStore((state) => state.newsItems);
+  const tickers = useResearchStore((state) => state.tickers);
+  const followUps = useResearchStore((state) => state.followUps);
+  const tickerMap = groupById(tickers);
+  const followUpSummary = getFollowUpSummary(followUps);
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
@@ -32,12 +34,12 @@ export function FollowUpPage() {
         (searchParams.get("status") as "all" | (typeof FOLLOW_UP_STATUSES)[number] | null) ?? "all",
       region: (searchParams.get("region") as "all" | (typeof REGIONS)[number] | null) ?? "all",
       tickerId:
-        dataset.tickers.find(
+        tickers.find(
           (ticker) =>
             ticker.symbol === searchParams.get("ticker") || ticker.id === searchParams.get("ticker"),
         )?.id ?? "all",
     }),
-    [dataset.tickers, searchParams],
+    [tickers, searchParams],
   );
 
   const [search, setSearch] = useState(derivedState.search);
@@ -69,9 +71,9 @@ export function FollowUpPage() {
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
   };
 
-  const filtered = dataset.followUps
+  const filtered = followUps
     .filter((record) => {
-      const sourceNews = dataset.newsItems.find((item) => item.id === record.newsItemId);
+      const sourceNews = newsItems.find((item) => item.id === record.newsItemId);
 
       if (!sourceNews) {
         return false;
@@ -118,7 +120,7 @@ export function FollowUpPage() {
         eyebrow="팔로업 / 결과 검증"
         title="후속 검증 루프"
         description="대시보드 카드에서 Pending, Correct 같은 상태를 눌러 이 화면으로 내려오도록 연결했습니다."
-        meta={`총 ${dataset.followUps.length}건 팔로업`}
+        meta={`총 ${followUps.length}건 팔로업`}
       >
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">상태 기반 drill-down</Badge>
@@ -150,7 +152,7 @@ export function FollowUpPage() {
         />
         <StatCard
           label="커버리지"
-          value={`${Math.round((dataset.followUps.length / Math.max(dataset.newsItems.length, 1)) * 100)}%`}
+          value={`${Math.round((followUps.length / Math.max(newsItems.length, 1)) * 100)}%`}
           description="뉴스 대비 후속 검증 기록 비율입니다."
           accent="linear-gradient(90deg, #9f6b2c, #ddb27a)"
         />
@@ -202,12 +204,12 @@ export function FollowUpPage() {
             value: tickerId,
             onChange: (value) => {
               setTickerId(value);
-              const ticker = dataset.tickers.find((entry) => entry.id === value);
+              const ticker = tickers.find((entry) => entry.id === value);
               updateQuery({ ticker: ticker?.symbol ?? value });
             },
             options: [
               { label: "전체 티커", value: "all" },
-              ...dataset.tickers.map((ticker) => ({ label: ticker.symbol, value: ticker.id })),
+              ...tickers.map((ticker) => ({ label: ticker.symbol, value: ticker.id })),
             ],
           },
         ]}
@@ -220,7 +222,7 @@ export function FollowUpPage() {
         <div className="space-y-5">
           {filtered.length ? (
             filtered.map((record) => {
-              const sourceNews = dataset.newsItems.find((item) => item.id === record.newsItemId);
+              const sourceNews = newsItems.find((item) => item.id === record.newsItemId);
 
               if (!sourceNews) {
                 return null;

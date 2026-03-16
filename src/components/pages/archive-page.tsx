@@ -77,13 +77,17 @@ function resolveContentType(rawValue: string | null) {
 }
 
 export function ArchivePage() {
-  const dataset = useResearchStore((state) => state);
-  const themeMap = groupById(dataset.themes);
-  const tickerMap = groupById(dataset.tickers);
+  const newsItems = useResearchStore((state) => state.newsItems);
+  const themes = useResearchStore((state) => state.themes);
+  const tickers = useResearchStore((state) => state.tickers);
+  const portfolioItems = useResearchStore((state) => state.portfolioItems);
+  const preferences = useResearchStore((state) => state.preferences);
+  const themeMap = groupById(themes);
+  const tickerMap = groupById(tickers);
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
-  const latestDate = getLatestNewsDate(dataset.newsItems);
+  const latestDate = getLatestNewsDate(newsItems);
   const todayKey = latestDate ? toDateKey(latestDate) : "all";
 
   const derivedState = useMemo<{
@@ -107,16 +111,16 @@ export function ArchivePage() {
       date: rawDate === "today" ? todayKey : rawDate ?? "all",
       slot: (searchParams.get("slot") as "all" | (typeof SCAN_SLOTS)[number] | null) ?? "all",
       region: (searchParams.get("region") as "all" | (typeof REGIONS)[number] | null) ?? "all",
-      themeId: resolveThemeId(searchParams.get("theme"), dataset.themes),
-      tickerId: resolveTickerId(searchParams.get("ticker"), dataset.tickers),
+      themeId: resolveThemeId(searchParams.get("theme"), themes),
+      tickerId: resolveTickerId(searchParams.get("ticker"), tickers),
       importance:
         (rawImportance as "all" | (typeof IMPORTANCE_LEVELS)[number] | null) ?? "all",
       sort:
         (searchParams.get("sort") as (typeof NEWS_SORT_OPTIONS)[number] | null) ??
-        dataset.preferences.preferredSort,
+        preferences.preferredSort,
       linked: searchParams.get("linked") ?? "all",
     };
-  }, [dataset.preferences.preferredSort, dataset.themes, dataset.tickers, searchParams, todayKey]);
+  }, [preferences.preferredSort, themes, tickers, searchParams, todayKey]);
 
   const [search, setSearch] = useState(derivedState.search);
   const [contentType, setContentType] = useState<ContentType | "all">(derivedState.contentType);
@@ -158,14 +162,14 @@ export function ArchivePage() {
   };
 
   const linkedTickerIds = new Set(
-    dataset.portfolioItems
+    portfolioItems
       .filter((item) => item.isHolding || item.isWatchlist)
-      .map((item) => dataset.tickers.find((ticker) => ticker.symbol === item.symbol)?.id)
+      .map((item) => tickers.find((ticker) => ticker.symbol === item.symbol)?.id)
       .filter((value): value is string => Boolean(value)),
   );
-  const linkedThemeIds = new Set(dataset.preferences.interestThemeIds);
+  const linkedThemeIds = new Set(preferences.interestThemeIds);
 
-  const filteredItems = filterNewsItems(dataset.newsItems, {
+  const filteredItems = filterNewsItems(newsItems, {
     search,
     contentType,
     date,
@@ -195,7 +199,7 @@ export function ArchivePage() {
     setThemeId("all");
     setTickerId("all");
     setImportance("all");
-    setSort(dataset.preferences.preferredSort);
+    setSort(preferences.preferredSort);
     updateQuery({
       q: "",
       type: "",
@@ -216,7 +220,7 @@ export function ArchivePage() {
         eyebrow="Archive"
         title="뉴스, 분석, 투자 의견, 모니터링을 한 흐름에서 탐색"
         description="기록 성격이 다른 콘텐츠를 같은 검색 흐름 안에서 보되, 타입 필터로 빠르게 좁혀서 읽을 수 있도록 정리했습니다."
-        meta={`총 ${dataset.newsItems.length}건 보관`}
+        meta={`총 ${newsItems.length}건 보관`}
       >
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">타입 필터</Badge>
@@ -258,7 +262,7 @@ export function ArchivePage() {
             options: [
               { label: "전체 날짜", value: "all" },
               ...(todayKey !== "all" ? [{ label: "오늘", value: todayKey }] : []),
-              ...getUniqueDateKeys(dataset.newsItems).map((dateKey) => ({
+              ...getUniqueDateKeys(newsItems).map((dateKey) => ({
                 label: formatCalendarDate(`${dateKey}T00:00:00+09:00`),
                 value: dateKey,
               })),
@@ -293,12 +297,12 @@ export function ArchivePage() {
             value: themeId,
             onChange: (value) => {
               setThemeId(value);
-              const theme = dataset.themes.find((entry) => entry.id === value);
+              const theme = themes.find((entry) => entry.id === value);
               updateQuery({ theme: theme?.slug ?? value });
             },
             options: [
               { label: "전체 테마", value: "all" },
-              ...dataset.themes.map((theme) => ({
+              ...themes.map((theme) => ({
                 label: getDisplayTheme(theme).name,
                 value: theme.id,
               })),
@@ -309,12 +313,12 @@ export function ArchivePage() {
             value: tickerId,
             onChange: (value) => {
               setTickerId(value);
-              const ticker = dataset.tickers.find((entry) => entry.id === value);
+              const ticker = tickers.find((entry) => entry.id === value);
               updateQuery({ ticker: ticker?.symbol ?? value });
             },
             options: [
               { label: "전체 티커", value: "all" },
-              ...dataset.tickers.map((ticker) => ({ label: ticker.symbol, value: ticker.id })),
+              ...tickers.map((ticker) => ({ label: ticker.symbol, value: ticker.id })),
             ],
           },
           {
