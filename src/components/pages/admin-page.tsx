@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { PencilLine, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
 
 import { PageIntro } from "@/components/layout/page-intro";
@@ -180,6 +180,26 @@ export function AdminPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const newsFormSectionRef = useRef<HTMLDivElement | null>(null);
+  const newsTitleInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!editingNewsId) {
+      return;
+    }
+
+    newsFormSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    const focusTimer = window.setTimeout(() => {
+      newsTitleInputRef.current?.focus();
+      newsTitleInputRef.current?.select();
+    }, 220);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [editingNewsId]);
 
   const resetNewsForm = () => {
     setEditingNewsId(null);
@@ -358,6 +378,7 @@ export function AdminPage() {
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
+        <div ref={newsFormSectionRef}>
         <SectionCard
           title={editingNewsId ? "뉴스 수정" : "뉴스 등록"}
           description="저장 즉시 서버에 기록되고, 성공하면 최신 Supabase 데이터셋으로 화면이 다시 동기화됩니다."
@@ -384,6 +405,7 @@ export function AdminPage() {
               </Field>
               <Field label="제목">
                 <input
+                  ref={newsTitleInputRef}
                   required
                   value={newsForm.title}
                   onChange={(event) => setNewsForm({ ...newsForm, title: event.target.value })}
@@ -672,6 +694,7 @@ export function AdminPage() {
             </div>
           </form>
         </SectionCard>
+        </div>
 
         <SectionCard
           title="테마 관리"
@@ -823,7 +846,7 @@ export function AdminPage() {
                   onClick={() => {
                     setEditingNewsId(item.id);
                     setNewsForm(mapNewsItemToForm(item));
-                    setStatusMessage(null);
+                    setStatusMessage("수정 폼으로 이동했습니다. 내용을 바꾼 뒤 저장해 주세요.");
                     setErrorMessage(null);
                   }}
                   className="inline-flex items-center gap-2 rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)] disabled:opacity-60"
