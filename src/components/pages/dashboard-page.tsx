@@ -178,7 +178,7 @@ export function DashboardPage() {
             {slotBuckets.map((bucket) => (
               <Link
                 key={bucket.slot}
-                href={buildArchiveHref({ type: "news", date: "today", slot: bucket.slot })}
+                href={buildArchiveHref({ date: "today", slot: bucket.slot })}
                 className="group rounded-[24px] border border-[var(--border-soft)] bg-[rgba(243,239,231,0.72)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[0_22px_50px_rgba(16,29,46,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(167,112,49,0.35)]"
               >
                 <div className="flex items-center justify-between">
