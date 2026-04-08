@@ -49,3 +49,25 @@ for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 insert into storage.buckets (id, name, public)
 values ('news-images', 'news-images', true)
 on conflict (id) do update set public = excluded.public;
+
+-- Best-effort cleanup queue: when a news_item_images row is deleted but the
+-- corresponding storage object cannot be removed (transient outage, etc.), the
+-- failed storage path is recorded here so a periodic sweep can reap orphans.
+create table if not exists public.news_image_cleanup_queue (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid(),
+  storage_path text not null,
+  failure_reason text not null default '',
+  attempts integer not null default 0,
+  created_at timestamptz not null default timezone('utc', now()),
+  last_attempt_at timestamptz
+);
+
+create index if not exists idx_news_image_cleanup_queue_owner_created
+  on public.news_image_cleanup_queue (owner_id, created_at desc);
+
+alter table public.news_image_cleanup_queue enable row level security;
+
+drop policy if exists "news image cleanup owner access" on public.news_image_cleanup_queue;
+create policy "news image cleanup owner access" on public.news_image_cleanup_queue
+for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());

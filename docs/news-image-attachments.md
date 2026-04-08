@@ -54,13 +54,102 @@ Image binaries live in a Supabase Storage bucket called **`news-images`**.
 - The internal upload helper sets
   `Cache-Control: public, max-age=31536000, immutable` so CDN/browser caching is
   effective for the lifetime of the asset.
-- Maximum upload size is **8 MB** per image. Larger uploads return a 4xx error
-  before the binary touches storage.
+- Maximum incoming upload size is **8 MB** per image (pre-optimization).
+  Larger uploads return a 4xx error before the binary touches storage.
 - Allowed mime types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`,
   `image/avif`.
 
 External URLs (e.g. already-hosted screenshots) can be attached without
 re-upload by passing `url` instead of `bufferBase64`.
+
+## Upload-time optimization
+
+To keep archive detail pages fast even when ChangseBot or an admin uploads a
+multi-megabyte phone screenshot, every uploaded buffer is re-encoded server-side
+**before** it ever reaches Supabase Storage. The implementation uses
+[`sharp`](https://sharp.pixelplumbing.com/), the same native image library
+Next.js uses internally for `next/image`.
+
+### Exact behavior
+
+| Aspect | Value |
+|---|---|
+| Library | `sharp` (libvips) |
+| Max display dimension | **1600 px** on the longer side |
+| Resize fit | `inside` with `withoutEnlargement: true` (never upscale) |
+| Output format | **WebP** |
+| Output quality | 82 (sharp `effort: 4`) |
+| EXIF orientation | honored via `.rotate()` |
+| EXIF metadata | **stripped** on re-encode (privacy) |
+| Animated GIF | stored as-is (animation preserved, no resize) |
+| Animated WebP / AVIF (`pages > 1`) | stored as-is |
+| Decode failures | logged + stored as-is, never blocks the upload |
+| Original buffer | **dropped** — only the optimized version is stored |
+
+### What gets rendered
+
+The detail page (`/archive/[id]`) renders `image.public_url`, which now points
+**directly at the optimized WebP**. There is no separate "thumbnail" track or
+"original" fallback — the single optimized version is what users see and
+download. This keeps the storage footprint and the wire bytes both minimal.
+
+If sharp cannot decode an input (e.g. an exotic format), the system falls back
+to storing the original buffer as-is and logs a warning. The image still works,
+it just isn't compressed.
+
+### Measured impact
+
+On synthetic test inputs the pipeline produced these reductions:
+
+- 3000×2000 PNG (low-entropy fill): **96 % smaller** (83 KB → 3 KB)
+- 3200×2000 high-entropy JPEG q95 (worst-case): **88 % smaller** (6.5 MB → 770 KB)
+
+Real screenshots (text + UI chrome) compress further than the high-entropy
+case. The practical ceiling for stored size after optimization is roughly
+500–800 KB even for full-resolution Retina captures.
+
+### Why a single optimized version, not original + thumbnail + display
+
+- Detail pages only need one render target. A second "thumbnail" version would
+  double storage and double upload latency for zero rendering benefit (list
+  pages already render no images at all).
+- Keeping the original would multiply storage cost without giving the dashboard
+  anything to use it for. The post-optimization version is what appears in the
+  detail gallery, the admin manager preview, and any future export.
+- If this app ever needs print-quality export, the assistant payload still
+  contains the source bytes — the user can re-upload from source if needed.
+
+## Storage cleanup robustness
+
+When an attachment is deleted (admin "삭제" button or assistant
+`imageOperations.delete`):
+
+1. The DB rows are deleted first.
+2. The corresponding storage objects are removed via `storage.remove()`.
+3. **If the storage call fails** (transient outage, permissions blip, etc.),
+   the failed object paths are inserted into `news_image_cleanup_queue` along
+   with the failure reason and the attempt timestamp.
+4. The DB row deletion is **not** rolled back. The user already asked for the
+   delete; we don't want a transient storage outage to block the dashboard.
+
+The cleanup queue is a per-owner table protected by RLS. To drain orphans
+later, run a small SQL maintenance step:
+
+```sql
+-- Inspect what's pending
+select id, storage_path, failure_reason, attempts, created_at
+from public.news_image_cleanup_queue
+order by created_at;
+
+-- After confirming with `storage.remove(...)` from the service-role client,
+-- delete the queue entries that were successfully reaped:
+delete from public.news_image_cleanup_queue where id = any(...);
+```
+
+This is intentionally a small, safe improvement: it does not introduce new
+infrastructure (no cron, no worker), it never blocks the user, and it gives
+operators a single audit point for orphaned files. A future iteration can wire
+a periodic admin route that drains the queue automatically.
 
 ### Setup
 
@@ -269,6 +358,10 @@ render exactly the same as before.
 
 The non-functional requirement was: site speed must not regress.
 
+- **Server-side optimization on upload.** Every uploaded image is decoded with
+  sharp, resized to fit within 1600×1600, and re-encoded to WebP @ q82 before
+  it reaches storage. A 6 MB phone screenshot becomes a ~500 KB asset. Detail
+  pages render this optimized version directly.
 - **No image data on list pages.** Card and dashboard list components do not
   render images at all. Even with many attachments per record, the list pages
   download nothing extra beyond a single denormalized URL string per attachment.
@@ -285,9 +378,9 @@ The non-functional requirement was: site speed must not regress.
 - **Plain `<img>` instead of `next/image`.** Using `next/image` would require
   configuring `images.remotePatterns` for the user's specific Supabase project
   URL (which differs per deployment) and would also serialize image metadata
-  through the Next.js optimizer on every request. Plain `<img>` with the
-  bucket's CDN-friendly headers is faster for this use case and does not need
-  per-deploy config.
+  through the Next.js optimizer on every request. Now that the upload pipeline
+  produces a small WebP asset and the bucket sends long-cache headers, the
+  optimizer is no longer needed.
 - **One parallel query.** The new `news_item_images` query is added to the
   existing `Promise.all` block, so the dataset still completes in one round of
   parallel fetches.
@@ -309,10 +402,15 @@ The non-functional requirement was: site speed must not regress.
 
 - Drag-and-drop reorder is not implemented; the admin uses up/down buttons.
   Reorder still goes through a single batched server call.
-- No automatic resize / thumbnail generation. The admin should compress images
-  before upload for very large screenshots.
 - Cover image is selected manually. There is no auto-pick beyond "first image
   in order" which is what the dataset returns when no `is_cover` flag is set.
-- Cleanup of Supabase Storage objects is best-effort; if the storage call fails
-  the database row deletion still succeeds. Run the included migration on a new
-  project to ensure the bucket exists.
+- The cleanup queue is drained manually for now (small SQL maintenance step).
+  A future iteration can add an admin route that drains the queue
+  automatically.
+- Animated GIF / animated WebP / animated AVIF are stored as-is so animation
+  is preserved. They are not resized. If a multi-megabyte animated GIF is
+  uploaded, it will still be served as-is. Prefer static screenshots when
+  possible.
+- `next/image` is still not used. If the deployment ever wants framework-driven
+  responsive `srcset`, configuring `images.remotePatterns` for the project's
+  Supabase URL is the migration path.

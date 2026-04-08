@@ -1,11 +1,30 @@
 import "server-only";
 
+import sharp from "sharp";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ensureMutationSuccess } from "@/lib/server/private-admin";
 
 export const NEWS_IMAGES_BUCKET = "news-images";
+/**
+ * Hard byte cap on the *incoming* upload (before any optimization).
+ * Most Telegram screenshots are well under this. Anything larger is rejected
+ * before being decoded so we never sit on giant buffers in memory.
+ */
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Maximum dimension (width or height) of the optimized display image.
+ * 1600 is large enough for full-screen retina viewing on most laptops while
+ * keeping the on-the-wire size for a typical screenshot well under 300 KB.
+ */
+const MAX_DISPLAY_DIMENSION = 1600;
+
+/**
+ * WebP encoder quality for the display image. 82 is the standard sharp/Google
+ * recommendation that preserves text and chart edges without visible artifacts.
+ */
+const DISPLAY_WEBP_QUALITY = 82;
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
@@ -13,6 +32,18 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/png",
   "image/webp",
   "image/gif",
+  "image/avif",
+]);
+
+/**
+ * Mime types we ask sharp to re-encode. Animated GIFs are intentionally
+ * excluded so the animation is preserved when present.
+ */
+const OPTIMIZABLE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
   "image/avif",
 ]);
 
@@ -96,11 +127,120 @@ function inferMimeFromFilename(filename: string | undefined) {
   return undefined;
 }
 
-function buildStorageObjectKey(ownerId: string, newsItemId: string, mimeType: string) {
-  const ext = EXTENSION_BY_MIME[mimeType] ?? "bin";
+type OptimizedImage = {
+  buffer: Buffer;
+  mimeType: string;
+  extension: string;
+  width?: number;
+  height?: number;
+  optimized: boolean;
+};
+
+/**
+ * Decode the incoming image with sharp and re-encode it as a single optimized
+ * WebP "display" image. The original buffer is intentionally NOT kept — the
+ * detail page only ever needs the optimized version, and dropping the original
+ * cuts storage usage by an order of magnitude on typical screenshots.
+ *
+ * Behavior summary:
+ * - JPEG / PNG / WebP / AVIF → resize to fit within 1600x1600, encode as WebP @ q82
+ * - GIF (potentially animated) → stored as-is to preserve animation
+ * - Anything sharp cannot decode → stored as-is, with a warning
+ * - EXIF orientation is honored (auto-rotate) and EXIF metadata is stripped
+ *   on re-encode for privacy.
+ */
+async function optimizeImageBuffer(
+  buffer: Buffer,
+  mimeType: string,
+): Promise<OptimizedImage> {
+  if (!OPTIMIZABLE_MIME_TYPES.has(mimeType)) {
+    return {
+      buffer,
+      mimeType,
+      extension: EXTENSION_BY_MIME[mimeType] ?? "bin",
+      optimized: false,
+    };
+  }
+
+  try {
+    const pipeline = sharp(buffer, { failOn: "none" }).rotate();
+    const metadata = await pipeline.metadata();
+
+    // Animated WebP / animated AVIF: do not flatten or sharp will drop frames.
+    if (metadata.pages && metadata.pages > 1) {
+      return {
+        buffer,
+        mimeType,
+        extension: EXTENSION_BY_MIME[mimeType] ?? "bin",
+        width: metadata.width,
+        height: metadata.height,
+        optimized: false,
+      };
+    }
+
+    const result = await pipeline
+      .resize(MAX_DISPLAY_DIMENSION, MAX_DISPLAY_DIMENSION, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: DISPLAY_WEBP_QUALITY, effort: 4 })
+      .toBuffer({ resolveWithObject: true });
+
+    return {
+      buffer: result.data,
+      mimeType: "image/webp",
+      extension: "webp",
+      width: result.info.width,
+      height: result.info.height,
+      optimized: true,
+    };
+  } catch (error) {
+    console.warn(
+      `news-images: optimization failed for ${mimeType}, falling back to original. ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return {
+      buffer,
+      mimeType,
+      extension: EXTENSION_BY_MIME[mimeType] ?? "bin",
+      optimized: false,
+    };
+  }
+}
+
+async function recordCleanupQueueEntries(
+  client: SupabaseClient,
+  ownerId: string,
+  storagePaths: string[],
+  failureReason: string,
+) {
+  if (storagePaths.length === 0) {
+    return;
+  }
+
+  const rows = storagePaths.map((path) => ({
+    owner_id: ownerId,
+    storage_path: path,
+    failure_reason: failureReason.slice(0, 500),
+    last_attempt_at: new Date().toISOString(),
+    attempts: 1,
+  }));
+
+  const { error } = await client.from("news_image_cleanup_queue").insert(rows);
+  if (error) {
+    // Last-resort: even the queue insert failed. Surface to logs only — we do
+    // not want to fail the parent delete because the user already asked for it.
+    console.warn(
+      `news-images: failed to enqueue cleanup for ${storagePaths.length} path(s): ${error.message}`,
+    );
+  }
+}
+
+function buildStorageObjectKey(ownerId: string, newsItemId: string, extension: string) {
   const random =
     globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  return `${ownerId}/${newsItemId}/${random}.${ext}`;
+  return `${ownerId}/${newsItemId}/${random}.${extension}`;
 }
 
 async function uploadBinaryToStorage(
@@ -127,15 +267,32 @@ function getPublicUrl(client: SupabaseClient, storagePath: string) {
   return data.publicUrl;
 }
 
-async function deleteStorageObjectsSafely(client: SupabaseClient, storagePaths: string[]) {
+/**
+ * Try to remove storage objects right after a row delete. If the storage call
+ * fails, we record the orphaned paths in `news_image_cleanup_queue` so a
+ * periodic sweep (or a future maintenance route) can drain them. The parent
+ * row delete is NOT rolled back — the user already asked for the deletion and
+ * we don't want a transient storage outage to block the dashboard.
+ */
+async function deleteStorageObjectsSafely(
+  client: SupabaseClient,
+  ownerId: string,
+  storagePaths: string[],
+) {
   if (storagePaths.length === 0) {
     return;
   }
 
-  const { error } = await client.storage.from(NEWS_IMAGES_BUCKET).remove(storagePaths);
-  if (error) {
-    // Storage cleanup is best-effort. Row deletion already succeeded.
-    console.warn(`news-images cleanup warning: ${error.message}`);
+  try {
+    const { error } = await client.storage.from(NEWS_IMAGES_BUCKET).remove(storagePaths);
+    if (error) {
+      console.warn(`news-images cleanup warning: ${error.message}`);
+      await recordCleanupQueueEntries(client, ownerId, storagePaths, error.message);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`news-images cleanup warning: ${message}`);
+    await recordCleanupQueueEntries(client, ownerId, storagePaths, message);
   }
 }
 
@@ -166,6 +323,8 @@ async function persistImageRecord(
     public_url: string;
     mime_type: string;
     file_size: number | null;
+    width: number | null;
+    height: number | null;
     caption: string;
     alt: string;
     display_order: number;
@@ -192,20 +351,28 @@ async function createImageFromInput(
 
   let storagePath: string;
   let publicUrl: string;
+  let storedMime = inferredMime;
   let fileSize: number | null = null;
+  let storedWidth: number | null = null;
+  let storedHeight: number | null = null;
 
   if (input.bufferBase64) {
-    const buffer = decodeBase64Buffer(input.bufferBase64);
-    if (buffer.byteLength > MAX_IMAGE_BYTES) {
+    const rawBuffer = decodeBase64Buffer(input.bufferBase64);
+    if (rawBuffer.byteLength > MAX_IMAGE_BYTES) {
       throw new Error(
         `Image exceeds the ${Math.round(MAX_IMAGE_BYTES / (1024 * 1024))}MB size limit.`,
       );
     }
 
-    storagePath = buildStorageObjectKey(ownerId, newsItemId, inferredMime);
-    await uploadBinaryToStorage(client, storagePath, buffer, inferredMime);
+    const optimized = await optimizeImageBuffer(rawBuffer, inferredMime);
+
+    storagePath = buildStorageObjectKey(ownerId, newsItemId, optimized.extension);
+    await uploadBinaryToStorage(client, storagePath, optimized.buffer, optimized.mimeType);
     publicUrl = getPublicUrl(client, storagePath);
-    fileSize = buffer.byteLength;
+    storedMime = optimized.mimeType;
+    fileSize = optimized.buffer.byteLength;
+    storedWidth = optimized.width ?? null;
+    storedHeight = optimized.height ?? null;
   } else if (input.url) {
     // Allow assistant flows to attach an already-hosted image without re-uploading.
     storagePath = `external/${input.url}`;
@@ -219,8 +386,10 @@ async function createImageFromInput(
     news_item_id: newsItemId,
     storage_path: storagePath,
     public_url: publicUrl,
-    mime_type: inferredMime,
+    mime_type: storedMime,
     file_size: fileSize,
+    width: storedWidth,
+    height: storedHeight,
     caption: (input.caption ?? "").trim(),
     alt: (input.alt ?? "").trim(),
     display_order:
@@ -266,7 +435,7 @@ async function deleteImagesByIds(
   const cleanupPaths = rows
     .map((row) => row.storage_path)
     .filter((path) => path && !path.startsWith("external/"));
-  await deleteStorageObjectsSafely(client, cleanupPaths);
+  await deleteStorageObjectsSafely(client, ownerId, cleanupPaths);
 }
 
 async function ensureSingleCover(
