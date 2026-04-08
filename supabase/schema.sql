@@ -92,6 +92,16 @@ create table public.news_item_images (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table public.news_image_cleanup_queue (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid(),
+  storage_path text not null,
+  failure_reason text not null default '',
+  attempts integer not null default 0,
+  created_at timestamptz not null default timezone('utc', now()),
+  last_attempt_at timestamptz
+);
+
 create table public.news_item_themes (
   owner_id uuid not null default auth.uid(),
   news_item_id uuid not null references public.news_items(id) on delete cascade,
@@ -207,6 +217,7 @@ alter table public.themes enable row level security;
 alter table public.tickers enable row level security;
 alter table public.news_items enable row level security;
 alter table public.news_item_images enable row level security;
+alter table public.news_image_cleanup_queue enable row level security;
 alter table public.news_item_themes enable row level security;
 alter table public.news_item_tickers enable row level security;
 alter table public.follow_up_records enable row level security;
@@ -224,6 +235,9 @@ create policy "news owner access" on public.news_items
 for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
 create policy "news image owner access" on public.news_item_images
+for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+
+create policy "news image cleanup owner access" on public.news_image_cleanup_queue
 for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
 create policy "news theme owner access" on public.news_item_themes
