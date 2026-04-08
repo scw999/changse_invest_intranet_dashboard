@@ -148,8 +148,9 @@ Supabase SQL Editor에서 아래 파일을 실행합니다.
 아카이브/뉴스 첨부 이미지 기능을 사용하려면 아래 마이그레이션을 한 번 실행해 `news_item_images` 테이블과 `news-images` Supabase Storage 버킷을 생성합니다.
 
 1. [supabase/news-images-migration.sql](./supabase/news-images-migration.sql)
+2. [supabase/news-images-inline-placement-migration.sql](./supabase/news-images-inline-placement-migration.sql) — 본문 인라인 배치(`placement`, `anchor_key`) 컬럼 추가
 
-기존 텍스트 전용 뉴스는 마이그레이션 후에도 변경 없이 동일하게 동작합니다.
+기존 텍스트 전용 뉴스와 갤러리 형식 첨부는 마이그레이션 후에도 변경 없이 동일하게 동작합니다. 인라인 배치 마이그레이션은 idempotent (`add column if not exists`) 라서 언제든 다시 실행해도 안전합니다.
 
 ### 2. 기존 프로젝트 하드닝
 

@@ -56,6 +56,8 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   "image/avif": "avif",
 };
 
+export type NewsImagePlacement = "gallery" | "inline";
+
 export type NewsImageRow = {
   id: string;
   owner_id: string;
@@ -70,6 +72,8 @@ export type NewsImageRow = {
   alt: string;
   display_order: number;
   is_cover: boolean;
+  placement: NewsImagePlacement;
+  anchor_key: string | null;
 };
 
 export type NewsImageCreateInput = {
@@ -81,6 +85,8 @@ export type NewsImageCreateInput = {
   alt?: string;
   order?: number;
   isCover?: boolean;
+  placement?: NewsImagePlacement;
+  anchorKey?: string;
 };
 
 export type NewsImageUpdateInput = {
@@ -89,6 +95,8 @@ export type NewsImageUpdateInput = {
   alt?: string;
   order?: number;
   isCover?: boolean;
+  placement?: NewsImagePlacement;
+  anchorKey?: string | null;
 };
 
 export type NewsImageOperations = {
@@ -296,6 +304,9 @@ async function deleteStorageObjectsSafely(
   }
 }
 
+const IMAGE_ROW_COLUMNS =
+  "id, owner_id, news_item_id, storage_path, public_url, mime_type, file_size, width, height, caption, alt, display_order, is_cover, placement, anchor_key";
+
 export async function fetchImagesForNewsItem(
   client: SupabaseClient,
   ownerId: string,
@@ -303,15 +314,59 @@ export async function fetchImagesForNewsItem(
 ): Promise<NewsImageRow[]> {
   const { data, error } = await client
     .from("news_item_images")
-    .select(
-      "id, owner_id, news_item_id, storage_path, public_url, mime_type, file_size, width, height, caption, alt, display_order, is_cover",
-    )
+    .select(IMAGE_ROW_COLUMNS)
     .eq("owner_id", ownerId)
     .eq("news_item_id", newsItemId)
     .order("display_order", { ascending: true });
 
   ensureMutationSuccess(error, "Failed to load news item images.");
   return (data ?? []) as NewsImageRow[];
+}
+
+const ANCHOR_KEY_PATTERN = /^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/i;
+const ANCHOR_KEY_MAX_LENGTH = 80;
+
+export function normalizeAnchorKey(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value
+    .trim()
+    .replace(/^#/, "")
+    .toLowerCase();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.length > ANCHOR_KEY_MAX_LENGTH) {
+    return null;
+  }
+
+  if (!ANCHOR_KEY_PATTERN.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function resolvePlacement(
+  rawPlacement: NewsImagePlacement | undefined,
+  rawAnchorKey: string | undefined,
+): { placement: NewsImagePlacement; anchorKey: string | null } {
+  const normalizedAnchor = rawAnchorKey ? normalizeAnchorKey(rawAnchorKey) : null;
+
+  // Inline requires a valid anchor key. If anchor is invalid, fall back to
+  // gallery so the image is never silently dropped.
+  if (rawPlacement === "inline") {
+    if (!normalizedAnchor) {
+      return { placement: "gallery", anchorKey: null };
+    }
+    return { placement: "inline", anchorKey: normalizedAnchor };
+  }
+
+  return { placement: "gallery", anchorKey: null };
 }
 
 async function persistImageRecord(
@@ -329,6 +384,8 @@ async function persistImageRecord(
     alt: string;
     display_order: number;
     is_cover: boolean;
+    placement: NewsImagePlacement;
+    anchor_key: string | null;
   },
 ) {
   const { error } = await client.from("news_item_images").insert(row);
@@ -381,6 +438,8 @@ async function createImageFromInput(
     throw new Error("Image input requires bufferBase64 or url.");
   }
 
+  const { placement, anchorKey } = resolvePlacement(input.placement, input.anchorKey);
+
   await persistImageRecord(client, {
     owner_id: ownerId,
     news_item_id: newsItemId,
@@ -395,6 +454,8 @@ async function createImageFromInput(
     display_order:
       typeof input.order === "number" && Number.isFinite(input.order) ? input.order : fallbackOrder,
     is_cover: Boolean(input.isCover),
+    placement,
+    anchor_key: anchorKey,
   });
 }
 
@@ -472,6 +533,46 @@ async function applyImageUpdates(
     }
     if (typeof update.isCover === "boolean") {
       patch.is_cover = update.isCover;
+    }
+
+    // Placement and anchor are coupled. If either is touched, we always
+    // re-resolve the pair so the row can never end up "inline with no anchor".
+    const placementTouched =
+      update.placement !== undefined || update.anchorKey !== undefined;
+
+    if (placementTouched) {
+      // Read existing values so a partial patch (e.g. only changing caption +
+      // anchor) preserves the other side of the pair.
+      const { data: currentRow, error: fetchError } = await client
+        .from("news_item_images")
+        .select("placement, anchor_key")
+        .eq("owner_id", ownerId)
+        .eq("news_item_id", newsItemId)
+        .eq("id", update.imageId)
+        .maybeSingle();
+      ensureMutationSuccess(fetchError, "Failed to load image for update.");
+
+      const currentPlacement = (currentRow?.placement === "inline" ? "inline" : "gallery") as
+        | "inline"
+        | "gallery";
+      const currentAnchorKey =
+        typeof currentRow?.anchor_key === "string" ? currentRow.anchor_key : undefined;
+
+      const nextPlacement: NewsImagePlacement =
+        update.placement !== undefined ? update.placement : currentPlacement;
+
+      let nextAnchorKey: string | undefined;
+      if (update.anchorKey === null) {
+        nextAnchorKey = undefined;
+      } else if (typeof update.anchorKey === "string") {
+        nextAnchorKey = update.anchorKey;
+      } else {
+        nextAnchorKey = currentAnchorKey;
+      }
+
+      const resolved = resolvePlacement(nextPlacement, nextAnchorKey);
+      patch.placement = resolved.placement;
+      patch.anchor_key = resolved.anchorKey;
     }
 
     if (Object.keys(patch).length === 0) {

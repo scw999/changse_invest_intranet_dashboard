@@ -56,6 +56,8 @@ type NewsImageRow = {
   alt: string;
   display_order: number;
   is_cover: boolean;
+  placement: "gallery" | "inline" | null;
+  anchor_key: string | null;
 };
 
 type FollowUpRow = {
@@ -138,7 +140,7 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
     client
       .from("news_item_images")
       .select(
-        "id, news_item_id, public_url, storage_path, mime_type, caption, alt, display_order, is_cover",
+        "id, news_item_id, public_url, storage_path, mime_type, caption, alt, display_order, is_cover, placement, anchor_key",
       )
       .order("display_order", { ascending: true }),
     client
@@ -229,6 +231,10 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
         alt: imageRow.alt,
         order: imageRow.display_order,
         isCover: imageRow.is_cover,
+        placement: (imageRow.placement === "inline" ? "inline" : "gallery") as
+          | "inline"
+          | "gallery",
+        anchorKey: imageRow.anchor_key ?? undefined,
       }));
 
       const cover = images.find((image) => image.isCover) ?? images[0];

@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { PageIntro } from "@/components/layout/page-intro";
+import { ArticleImage } from "@/components/research/article-image";
 import {
   ContentTypeBadge,
   DirectionBadge,
@@ -15,11 +16,16 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RichText } from "@/components/ui/rich-text";
 import { SectionCard } from "@/components/ui/section-card";
+import {
+  PREAMBLE_ANCHOR_KEY,
+  parseArticleSections,
+} from "@/lib/article-anchors";
 import { getDisplayNewsItem, getDisplayTheme } from "@/lib/content-kr";
 import { buildArchiveHref, buildFollowUpHref } from "@/lib/navigation";
 import { groupById } from "@/lib/selectors";
 import { useResearchStore } from "@/lib/store/research-store";
 import { formatLongDate, formatPublishedAt } from "@/lib/utils";
+import type { NewsItemImage } from "@/types/research";
 
 export function NewsDetailPage({ id }: { id: string }) {
   const newsItems = useResearchStore((state) => state.newsItems);
@@ -42,6 +48,38 @@ export function NewsDetailPage({ id }: { id: string }) {
 
   const displayItem = getDisplayNewsItem(item);
   const contentType = item.contentType ?? "news";
+
+  // The project's React Compiler memoizes plain const computations
+  // automatically, so manual useMemo is unnecessary here.
+  const allImages: NewsItemImage[] = item.images
+    ? [...item.images].sort((a, b) => a.order - b.order)
+    : [];
+
+  // Single deterministic pass over the article body. parseArticleSections is
+  // a cheap line scan; the compiler keeps it from re-running on unrelated
+  // re-renders.
+  const { sections, anchors } = parseArticleSections(displayItem.marketInterpretation);
+
+  // Resolve placement against the anchors actually present in the body. An
+  // image whose anchor no longer exists in the article falls back to gallery,
+  // so the image is never silently dropped.
+  const validAnchorKeys = new Set(anchors.map((anchor) => anchor.anchorKey));
+  const inlineImagesByAnchor = new Map<string, NewsItemImage[]>();
+  const galleryImages: NewsItemImage[] = [];
+
+  for (const image of allImages) {
+    if (
+      image.placement === "inline" &&
+      image.anchorKey &&
+      validAnchorKeys.has(image.anchorKey)
+    ) {
+      const next = inlineImagesByAnchor.get(image.anchorKey) ?? [];
+      next.push(image);
+      inlineImagesByAnchor.set(image.anchorKey, next);
+    } else {
+      galleryImages.push(image);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -151,39 +189,45 @@ export function NewsDetailPage({ id }: { id: string }) {
         </SectionCard>
       ) : null}
 
-      {item.images && item.images.length > 0 ? (
+      <SectionCard title="시장 해석" description="긴 해석 메모도 markdown 스타일로 읽기 좋게 렌더링합니다.">
+        <div className="space-y-4">
+          {sections.map((section, idx) => {
+            const inlineImages =
+              section.anchorKey === PREAMBLE_ANCHOR_KEY
+                ? []
+                : inlineImagesByAnchor.get(section.anchorKey) ?? [];
+
+            return (
+              <div key={`${section.anchorKey}-${idx}`}>
+                <RichText content={section.content} />
+                {inlineImages.map((image) => (
+                  <ArticleImage
+                    key={image.id}
+                    image={image}
+                    fallbackAlt={displayItem.title}
+                    inline
+                  />
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </SectionCard>
+
+      {galleryImages.length > 0 ? (
         <SectionCard
           title="첨부 이미지"
-          description="리포트 스크린샷과 참고 이미지를 본문 맥락 안에서 함께 확인할 수 있습니다."
+          description="본문 인라인 위치가 지정되지 않은 첨부 이미지를 갤러리 형태로 모아 보여줍니다."
         >
           <ul className="grid gap-4 sm:grid-cols-2">
-            {[...item.images]
-              .sort((a, b) => a.order - b.order)
-              .map((image) => (
-                <li
-                  key={image.id}
-                  className="overflow-hidden rounded-[20px] border border-[var(--border-soft)] bg-white/80"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={image.url}
-                    alt={image.alt || image.caption || displayItem.title}
-                    loading="lazy"
-                    decoding="async"
-                    className="block h-auto max-h-[420px] w-full object-cover"
-                  />
-                  {image.caption ? (
-                    <p className="px-4 py-3 text-sm text-[var(--text-muted)]">{image.caption}</p>
-                  ) : null}
-                </li>
-              ))}
+            {galleryImages.map((image) => (
+              <li key={image.id}>
+                <ArticleImage image={image} fallbackAlt={displayItem.title} />
+              </li>
+            ))}
           </ul>
         </SectionCard>
       ) : null}
-
-      <SectionCard title="시장 해석" description="긴 해석 메모도 markdown 스타일로 읽기 좋게 렌더링합니다.">
-        <RichText content={displayItem.marketInterpretation} />
-      </SectionCard>
 
       <SectionCard title="액션 아이디어" description="의견형 기록은 가설, 비중 판단, 실행 아이디어가 잘 읽히도록 간격을 넉넉히 둡니다.">
         <RichText content={displayItem.actionIdea} />

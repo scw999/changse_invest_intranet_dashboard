@@ -1,15 +1,22 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ImagePlus, Star, Trash2 } from "lucide-react";
 
-import type { NewsItemImage } from "@/types/research";
+import { extractArticleAnchors, normalizeAnchorKey } from "@/lib/article-anchors";
+import type { NewsItemImage, NewsImagePlacement } from "@/types/research";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
 type NewsImageManagerProps = {
   newsItemId: string;
   images: NewsItemImage[];
+  /**
+   * Markdown body the image manager should scan for `{#anchor-id}` headings.
+   * Used to populate the inline-anchor suggestion dropdown. Optional — when
+   * absent, the anchor input still works but offers no suggestions.
+   */
+  articleBody?: string;
   disabled?: boolean;
   onMutate: (
     body: Record<string, unknown>,
@@ -20,6 +27,8 @@ type NewsImageManagerProps = {
 type DraftMeta = {
   caption: string;
   alt: string;
+  placement: NewsImagePlacement;
+  anchorKey: string;
 };
 
 async function fileToBase64(file: File): Promise<string> {
@@ -42,6 +51,7 @@ async function fileToBase64(file: File): Promise<string> {
 export function NewsImageManager({
   newsItemId,
   images,
+  articleBody,
   disabled = false,
   onMutate,
 }: NewsImageManagerProps) {
@@ -51,16 +61,33 @@ export function NewsImageManager({
   const [isUploading, setIsUploading] = useState(false);
 
   const sortedImages = [...images].sort((a, b) => a.order - b.order);
+  const datalistId = `news-anchors-${newsItemId}`;
+
+  const detectedAnchors = useMemo(
+    () => extractArticleAnchors(articleBody ?? ""),
+    [articleBody],
+  );
+
+  const buildBaseDraft = (image: NewsItemImage): DraftMeta => ({
+    caption: image.caption,
+    alt: image.alt,
+    placement: image.placement,
+    anchorKey: image.anchorKey ?? "",
+  });
 
   const getDraft = (image: NewsItemImage): DraftMeta => {
-    return drafts[image.id] ?? { caption: image.caption, alt: image.alt };
+    return drafts[image.id] ?? buildBaseDraft(image);
   };
 
-  const setDraftField = (imageId: string, field: keyof DraftMeta, value: string) => {
+  const setDraftField = <K extends keyof DraftMeta>(
+    image: NewsItemImage,
+    field: K,
+    value: DraftMeta[K],
+  ) => {
     setDrafts((prev) => ({
       ...prev,
-      [imageId]: {
-        ...(prev[imageId] ?? { caption: "", alt: "" }),
+      [image.id]: {
+        ...(prev[image.id] ?? buildBaseDraft(image)),
         [field]: value,
       },
     }));
@@ -109,21 +136,46 @@ export function NewsImageManager({
 
   const handleSaveMeta = async (image: NewsItemImage) => {
     const draft = getDraft(image);
-    if (draft.caption === image.caption && draft.alt === image.alt) {
+    const captionChanged = draft.caption !== image.caption;
+    const altChanged = draft.alt !== image.alt;
+    const placementChanged = draft.placement !== image.placement;
+    const anchorChanged = (draft.anchorKey || "") !== (image.anchorKey ?? "");
+
+    if (!captionChanged && !altChanged && !placementChanged && !anchorChanged) {
       return;
+    }
+
+    // Inline placement requires a syntactically valid anchor key, otherwise
+    // the server will silently downgrade to gallery — better to surface that
+    // here so the admin can fix it before saving.
+    if (draft.placement === "inline") {
+      const normalized = normalizeAnchorKey(draft.anchorKey);
+      if (!normalized) {
+        setLocalError(
+          "인라인 배치를 사용하려면 anchor id 가 필요합니다. 예: samsung-valuation",
+        );
+        return;
+      }
+    }
+
+    setLocalError(null);
+
+    const updateEntry: Record<string, unknown> = {
+      imageId: image.id,
+    };
+    if (captionChanged) updateEntry.caption = draft.caption;
+    if (altChanged) updateEntry.alt = draft.alt;
+    if (placementChanged) updateEntry.placement = draft.placement;
+    if (anchorChanged || placementChanged) {
+      updateEntry.anchorKey =
+        draft.placement === "inline" ? draft.anchorKey.trim() : null;
     }
 
     await onMutate(
       {
         id: newsItemId,
         imageOperations: {
-          update: [
-            {
-              imageId: image.id,
-              caption: draft.caption,
-              alt: draft.alt,
-            },
-          ],
+          update: [updateEntry],
         },
       },
       "이미지 메타데이터를 저장했습니다.",
@@ -219,11 +271,26 @@ export function NewsImageManager({
         </div>
       ) : null}
 
+      {detectedAnchors.length > 0 ? (
+        <datalist id={datalistId}>
+          {detectedAnchors.map((anchor) => (
+            <option key={anchor.anchorKey} value={anchor.anchorKey}>
+              {`${"#".repeat(anchor.level)} ${anchor.heading}`}
+            </option>
+          ))}
+        </datalist>
+      ) : null}
+
       {sortedImages.length > 0 ? (
         <ul className="space-y-3">
           {sortedImages.map((image, index) => {
             const draft = getDraft(image);
-            const dirty = draft.caption !== image.caption || draft.alt !== image.alt;
+            const dirty =
+              draft.caption !== image.caption ||
+              draft.alt !== image.alt ||
+              draft.placement !== image.placement ||
+              (draft.anchorKey || "") !== (image.anchorKey ?? "");
+            const isInline = draft.placement === "inline";
             return (
               <li
                 key={image.id}
@@ -242,6 +309,15 @@ export function NewsImageManager({
                 <div className="flex flex-1 flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-faint)]">
                     <span className="font-semibold">#{index + 1}</span>
+                    {image.placement === "inline" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[rgba(46,106,100,0.12)] px-2 py-1 text-[#1d604f]">
+                        인라인 · {image.anchorKey ?? "(no anchor)"}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[rgba(23,42,70,0.06)] px-2 py-1 text-[var(--text-muted)]">
+                        갤러리
+                      </span>
+                    )}
                     {image.isCover ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-[#f3eee0] px-2 py-1 text-[#7a5b1c]">
                         <Star className="h-3 w-3" />
@@ -254,7 +330,7 @@ export function NewsImageManager({
                     placeholder="캡션"
                     value={draft.caption}
                     disabled={disabled}
-                    onChange={(event) => setDraftField(image.id, "caption", event.target.value)}
+                    onChange={(event) => setDraftField(image, "caption", event.target.value)}
                     className="field"
                   />
                   <input
@@ -262,9 +338,39 @@ export function NewsImageManager({
                     placeholder="대체 텍스트 (alt)"
                     value={draft.alt}
                     disabled={disabled}
-                    onChange={(event) => setDraftField(image.id, "alt", event.target.value)}
+                    onChange={(event) => setDraftField(image, "alt", event.target.value)}
                     className="field"
                   />
+                  <div className="grid gap-2 sm:grid-cols-[160px_1fr]">
+                    <select
+                      value={draft.placement}
+                      disabled={disabled}
+                      onChange={(event) =>
+                        setDraftField(
+                          image,
+                          "placement",
+                          event.target.value as NewsImagePlacement,
+                        )
+                      }
+                      className="field"
+                    >
+                      <option value="gallery">갤러리</option>
+                      <option value="inline">인라인 (anchor)</option>
+                    </select>
+                    <input
+                      type="text"
+                      list={detectedAnchors.length > 0 ? datalistId : undefined}
+                      placeholder={
+                        isInline
+                          ? "anchor id (예: samsung-valuation)"
+                          : "anchor id (인라인일 때만 사용)"
+                      }
+                      value={draft.anchorKey}
+                      disabled={disabled || !isInline}
+                      onChange={(event) => setDraftField(image, "anchorKey", event.target.value)}
+                      className="field"
+                    />
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"

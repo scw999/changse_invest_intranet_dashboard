@@ -844,6 +844,7 @@ export function AdminPage() {
                 <NewsImageManager
                   newsItemId={item.id}
                   images={item.images ?? []}
+                  articleBody={getDisplayNewsItem(item).marketInterpretation}
                   disabled={isSubmitting}
                   onMutate={(body, message) =>
                     runMutation(

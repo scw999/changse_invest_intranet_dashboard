@@ -23,6 +23,9 @@ public.news_item_images (
   alt             text not null default '',
   display_order   integer not null default 0,
   is_cover        boolean not null default false,
+  placement       text not null default 'gallery'
+                  check (placement in ('gallery', 'inline')),
+  anchor_key      text,                    -- stable id like "samsung-valuation"
   created_at      timestamptz not null,
   updated_at      timestamptz not null
 )
@@ -34,7 +37,14 @@ Key properties:
 - `display_order` is stable; render code always sorts by this value.
 - `caption` and `alt` are first-class.
 - `is_cover` lets one image act as the representative thumbnail.
+- `placement` controls where the image renders: `'gallery'` (default, appears
+  in the bottom "첨부 이미지" section) or `'inline'` (renders inside the
+  article body, immediately after a matching anchored heading).
+- `anchor_key` is the stable id the image targets when `placement = 'inline'`.
+  Stored as plain lowercase text; the convention is kebab-case.
 - Existing news rows have zero rows in this table, so they keep working unchanged.
+- Existing image rows from before the inline-placement migration default to
+  `placement = 'gallery'` and behave exactly like before.
 - RLS mirrors `news_items`: only the owner can read/write.
 - `news_item_id` cascade deletes all images when a news row is removed.
 
@@ -155,18 +165,116 @@ a periodic admin route that drains the queue automatically.
 
 1. Run `supabase/news-images-migration.sql` once on existing projects (this
    creates the table, the trigger, the RLS policy, and the storage bucket).
-2. New deployments will get the table from the updated `supabase/schema.sql`.
-   The storage bucket still has to come from the migration file because
+2. Run `supabase/news-images-inline-placement-migration.sql` once on existing
+   projects to add the `placement` and `anchor_key` columns plus the inline
+   index. The migration is idempotent and uses `add column if not exists`,
+   so it is safe to re-run.
+3. New deployments will get all columns from the updated `supabase/schema.sql`.
+   The storage bucket still has to come from the bucket migration file because
    `storage.buckets` is not part of the base schema file.
-3. No new environment variables are required. Image uploads reuse
+4. No new environment variables are required. Image uploads reuse
    `SUPABASE_SERVICE_ROLE_KEY` from the existing trusted server path.
 
-## Assistant / internal ingest
+## Inline placement model
+
+By default, attached images render in the bottom "첨부 이미지" gallery
+section. With the inline-placement model, ChangseBot or an admin can pin
+specific images directly into the article flow next to the relevant content,
+without relying on fragile heading-text matching.
+
+### Anchor convention
+
+Any markdown heading line in the `marketInterpretation` field can carry a
+**stable anchor id** by appending `{#anchor-id}` at the end:
+
+```markdown
+## 상단 요약 카드
+- 핵심 1
+- 핵심 2
+
+## 사실
+### 삼성전자 저평가 논점 {#samsung-valuation}
+본문 ...
+
+### 사모대출 불안 {#private-credit-risk}
+본문 ...
+
+### 트럼프 48시간 발언 {#trump-48h}
+본문 ...
+
+## 시장 해석 {#market-interpretation}
+본문 ...
+
+## 창세봇 의견 {#bot-opinion}
+본문 ...
+
+## Bull {#bull}
+본문 ...
+
+## Bear {#bear}
+본문 ...
+
+## 실행 아이디어 {#action-ideas}
+본문 ...
+
+## 체크포인트 {#checkpoints}
+본문 ...
+```
+
+Rules:
+
+- Anchor id must be lowercase, max 80 chars, allowed characters
+  `[a-z0-9_-]`, must start and end with alphanumeric.
+- Heading text **before** the `{#id}` may be edited freely without breaking
+  placement. Only the `{#id}` part is the stable contract.
+- Headings without `{#id}` work normally — they just cannot host inline
+  images.
+- Mixed structure is fine: some headings can have anchors, others not. The
+  parser scans the body once on every detail-page render and produces
+  deterministic sections.
+- Duplicate anchor ids in the same body are tolerated; only the first
+  occurrence is used as the placement target so the result stays predictable.
+
+### Image placement metadata
+
+Each `news_item_images` row carries two new fields:
+
+| Field | Values | Purpose |
+|---|---|---|
+| `placement` | `"gallery"` (default) \| `"inline"` | Where the image renders |
+| `anchor_key` | nullable lowercase text | Required for inline placement |
+
+The server-side resolver in `news-images.ts` enforces an invariant:
+**inline placement requires a valid `anchor_key`**. If `placement = 'inline'`
+is sent without a valid `anchor_key`, or with one that fails normalization,
+the row is silently downgraded to `placement = 'gallery'` instead of being
+rejected. This means image attachments can never be silently dropped just
+because their placement metadata is wrong.
+
+At render time the detail page additionally checks that the `anchor_key`
+actually exists in the current body. If the body has been edited and the
+target heading is gone, the inline image **falls back to the gallery section**
+for that render — it is never silently hidden.
+
+### Rendering behavior on the detail page
+
+The "시장 해석" section now renders body + inline images **interleaved**:
+
+1. The body is parsed into anchored sections by the line-scan parser.
+2. Each section is rendered as `<RichText>`.
+3. Immediately after a section, every inline image whose `anchor_key` matches
+   that section's anchor renders as a `<figure>` with caption + alt.
+4. Multiple inline images can target the same anchor; they render in
+   `display_order`.
+5. The bottom "첨부 이미지" section now contains only the **fallback gallery**:
+   any image with `placement = 'gallery'`, plus any inline image whose anchor
+   could not be resolved against the current body. If the gallery list is
+   empty, the entire section is hidden.
 
 All examples target `POST /api/internal/ingest/news` with the existing
 `Authorization: Bearer <ASSISTANT_INGEST_TOKEN>` header.
 
-### Create a post with images
+### Create a post with inline-anchored images
 
 ```json
 {
@@ -180,7 +288,7 @@ All examples target `POST /api/internal/ingest/news` with the existing
   "scanSlot": "13",
   "region": "GLOBAL",
   "affectedAssetClasses": ["Equities"],
-  "marketInterpretation": "본문...",
+  "marketInterpretation": "## 사실\n### 삼성전자 저평가 논점 {#samsung-valuation}\n...\n### 사모대출 불안 {#private-credit-risk}\n...\n### 트럼프 48시간 발언 {#trump-48h}\n...",
   "directionalView": "Mixed",
   "actionIdea": "실행 아이디어...",
   "followUpStatus": "Pending",
@@ -188,20 +296,56 @@ All examples target `POST /api/internal/ingest/news` with the existing
   "importance": "High",
   "images": [
     {
-      "filename": "private-credit-slide.jpg",
+      "filename": "samsung.jpg",
       "contentType": "image/jpeg",
-      "caption": "사모대출 이슈 참고 이미지",
-      "alt": "사모대출 이슈 슬라이드",
+      "caption": "삼성전자 저평가 이슈 화면",
+      "alt": "삼성전자 관련 이미지",
       "order": 1,
-      "bufferBase64": "<base64 image data>"
+      "placement": "inline",
+      "anchorKey": "samsung-valuation",
+      "bufferBase64": "<base64>"
+    },
+    {
+      "filename": "private-credit.jpg",
+      "contentType": "image/jpeg",
+      "caption": "사모대출 이슈 화면",
+      "alt": "사모대출 관련 이미지",
+      "order": 2,
+      "placement": "inline",
+      "anchorKey": "private-credit-risk",
+      "bufferBase64": "<base64>"
     },
     {
       "filename": "trump-48h.jpg",
       "contentType": "image/jpeg",
-      "caption": "트럼프 48시간 발언 참고 이미지",
-      "alt": "트럼프 48시간 관련 이미지",
-      "order": 2,
-      "bufferBase64": "<base64 image data>"
+      "caption": "트럼프 48시간 발언 화면",
+      "alt": "트럼프 발언 관련 이미지",
+      "order": 3,
+      "placement": "inline",
+      "anchorKey": "trump-48h",
+      "bufferBase64": "<base64>"
+    }
+  ]
+}
+```
+
+### Create a post with gallery-only images (legacy / unchanged)
+
+Omit `placement` and `anchorKey` to keep the old behavior. Images render in
+the bottom "첨부 이미지" gallery section just like before.
+
+```json
+{
+  "operation": "upsert",
+  "title": "...",
+  "marketInterpretation": "...",
+  "images": [
+    {
+      "filename": "screenshot.jpg",
+      "contentType": "image/jpeg",
+      "caption": "참고 이미지",
+      "order": 1,
+      "bufferBase64": "<base64>"
     }
   ]
 }
@@ -245,7 +389,7 @@ You can patch only the fields you want; other text fields are preserved.
 }
 ```
 
-### Update image metadata
+### Update image metadata (including placement and anchor)
 
 ```json
 {
@@ -255,15 +399,32 @@ You can patch only the fields you want; other text fields are preserved.
     "update": [
       {
         "imageId": "img-1",
+        "placement": "inline",
+        "anchorKey": "samsung-valuation",
         "caption": "수정된 캡션",
         "alt": "수정된 alt",
-        "order": 1,
-        "isCover": true
+        "order": 1
+      },
+      {
+        "imageId": "img-2",
+        "placement": "gallery",
+        "order": 2
       }
     ]
   }
 }
 ```
+
+`placement` and `anchorKey` are coupled. When the server processes the
+update it re-resolves the pair against the current row, so:
+
+- Sending only `placement: "inline"` keeps the existing anchor.
+- Sending only `anchorKey: "..."` keeps the existing placement.
+- Sending `placement: "gallery"` clears `anchor_key` automatically.
+- Sending `anchorKey: null` (explicit JSON null) clears the anchor and
+  forces gallery placement.
+- Sending `placement: "inline"` with an invalid or missing anchor key
+  silently downgrades to `gallery` instead of failing the request.
 
 When `isCover: true` is set on any image, the server automatically clears the
 flag on every other image attached to the same news item.
@@ -333,26 +494,52 @@ under "기존 뉴스 목록".
 For each news item the admin can:
 
 - Upload one or more images (multi-file picker; client-side base64 encode).
-- See attached images sorted by order, with thumbnail, caption, alt, cover flag.
+- See attached images sorted by order, with thumbnail, caption, alt, cover
+  flag, and **a placement badge** (`갤러리` or `인라인 · <anchor-key>`).
 - Edit caption / alt and save the metadata.
+- **Switch placement between gallery and inline**, and edit `anchorKey` for
+  inline images. The anchor input is paired with a `<datalist>` populated by
+  the anchors detected in the current `marketInterpretation` body, so the
+  admin gets autocomplete suggestions instead of typing blindly.
 - Reorder via "위로" / "아래로" buttons (server reorder uses `imageOperations.reorder`).
 - Mark a representative cover image (`isCover`).
 - Delete an image.
 
+Anchor suggestions are derived live from the current article body via
+`extractArticleAnchors()` from `src/lib/article-anchors.ts`, so the suggestion
+list stays in sync with whatever the admin sees in the editor without any
+extra API call.
+
+If the admin selects `inline` but does not provide a valid anchor id, the
+manager surfaces an inline error before sending the request, so the user
+gets immediate feedback rather than silently being downgraded to gallery
+on the server.
+
 All operations go through the existing `PATCH /api/private/admin/news` route,
-which now accepts an `imageOperations` body and an optional `images` body for
-"add only" calls. Sending an image-only PATCH no longer requires the full news
+which now accepts an `imageOperations` body with `placement` and `anchorKey`
+fields. Sending an image-only PATCH still does not require the full news
 payload.
 
 ## Archive detail rendering
 
-The detail page (`/archive/[id]`) renders a "첨부 이미지" section above the
-market interpretation when the news item has at least one attachment. Images are
-sorted by `order`, the caption is rendered below each image, and the layout is
-a two-column responsive grid that collapses to one column on mobile.
+The detail page (`/archive/[id]`) does this in order:
 
-Existing posts without any attachments do not show the section at all, so they
-render exactly the same as before.
+1. **Parse the body once.** `parseArticleSections()` walks the body line by
+   line, splitting it into anchored sections. Headings without `{#id}` stay in
+   the previous section. The first section (the preamble) holds everything
+   before the first anchored heading.
+2. **Render the article inside "시장 해석".** Each parsed section is handed to
+   `<RichText>`. Immediately after each anchored section, every inline image
+   targeting that anchor renders as a `<figure>`.
+3. **Render the gallery fallback.** Any image with `placement = 'gallery'`,
+   plus any inline image whose anchor could not be resolved against the
+   current body, falls into the bottom "첨부 이미지" section. If the gallery
+   list is empty, the section is hidden entirely.
+
+Existing text-only posts and existing gallery-style posts both render
+unchanged: with no `{#id}` headings the body becomes a single preamble
+section that renders identically to the old single `<RichText>` block, and
+the gallery section behaves exactly like before.
 
 ## Performance choices
 
@@ -391,12 +578,17 @@ The non-functional requirement was: site speed must not regress.
 ## Backward compatibility
 
 - Existing news rows with no attachments work unchanged. The detail page only
-  renders the image section when `images.length > 0`.
-- Admin and assistant payloads that omit `images` and `imageOperations` behave
-  exactly the same as before.
+  renders the gallery section when at least one fallback image exists.
+- Existing image attachments default to `placement = 'gallery'` after the
+  inline-placement migration runs, which exactly mirrors the previous "all
+  images in the gallery" behavior.
+- Admin and assistant payloads that omit `placement`, `anchorKey`, `images`,
+  and `imageOperations` behave exactly the same as before.
+- Bodies without any `{#id}` headings render exactly as before — the parser
+  produces a single preamble section and no inline-image lookup ever runs.
 - The `NewsItem.images` field is optional in TypeScript, so mock data and any
   existing seed paths do not need to be modified.
-- The migration is additive: no existing column or row is changed.
+- The migrations are additive: no existing column or row is changed.
 
 ## Limitations / future work
 
@@ -414,3 +606,10 @@ The non-functional requirement was: site speed must not regress.
 - `next/image` is still not used. If the deployment ever wants framework-driven
   responsive `srcset`, configuring `images.remotePatterns` for the project's
   Supabase URL is the migration path.
+- Inline placement only resolves against the `marketInterpretation` body. The
+  `actionIdea` and `followUpNote` blocks render as plain markdown without
+  inline-image support. This was a deliberate scope choice — the long-form
+  body is where the assistant's structured templates live.
+- The anchor parser handles `{#id}` only on heading lines. Inline anchors
+  (e.g. mid-paragraph markers) are intentionally not supported because they
+  break visual flow and are not necessary for the operational use case.

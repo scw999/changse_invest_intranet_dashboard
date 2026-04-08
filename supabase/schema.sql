@@ -88,6 +88,8 @@ create table public.news_item_images (
   alt text not null default '',
   display_order integer not null default 0,
   is_cover boolean not null default false,
+  placement text not null default 'gallery' check (placement in ('gallery', 'inline')),
+  anchor_key text,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -184,6 +186,9 @@ create index idx_news_item_images_owner_news_order
   on public.news_item_images (owner_id, news_item_id, display_order);
 create index idx_news_item_images_news_id
   on public.news_item_images (news_item_id);
+create index idx_news_item_images_inline_anchor
+  on public.news_item_images (news_item_id, anchor_key)
+  where placement = 'inline';
 
 create trigger set_themes_updated_at
 before update on public.themes
