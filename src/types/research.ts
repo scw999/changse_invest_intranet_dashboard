@@ -63,6 +63,19 @@ export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
 export type NewsSortOption = (typeof NEWS_SORT_OPTIONS)[number];
 export type ContentType = (typeof CONTENT_TYPES)[number];
 
+export type NewsItemImage = {
+  id: string;
+  url: string;
+  storagePath: string;
+  mimeType: string;
+  caption: string;
+  alt: string;
+  order: number;
+  isCover: boolean;
+  width?: number;
+  height?: number;
+};
+
 export type MonitoringMeta = {
   targetTickers?: string[];
   note?: string;
@@ -112,6 +125,8 @@ export type NewsItem = {
   followUpNote: string;
   importance: ImportanceLevel;
   monitoring?: MonitoringMeta;
+  images?: NewsItemImage[];
+  coverImageUrl?: string;
   createdAt: string;
   updatedAt: string;
 };

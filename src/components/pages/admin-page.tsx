@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import { PencilLine, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
 
+import { NewsImageManager } from "@/components/admin/news-image-manager";
 import { PageIntro } from "@/components/layout/page-intro";
 import {
   getDisplayFollowUp,
@@ -839,6 +840,23 @@ export function AdminPage() {
               <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
                 {getDisplayNewsItem(item).summary}
               </p>
+              <div className="mt-4">
+                <NewsImageManager
+                  newsItemId={item.id}
+                  images={item.images ?? []}
+                  disabled={isSubmitting}
+                  onMutate={(body, message) =>
+                    runMutation(
+                      "/api/private/admin/news",
+                      {
+                        method: "PATCH",
+                        body: JSON.stringify(body),
+                      },
+                      message,
+                    )
+                  }
+                />
+              </div>
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   type="button"

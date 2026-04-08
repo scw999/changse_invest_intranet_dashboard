@@ -6,6 +6,10 @@ import {
   internalNewsIngestSchema,
 } from "@/lib/server/assistant-ingest";
 import {
+  applyNewsImageOperations,
+  attachInitialNewsImages,
+} from "@/lib/server/news-images";
+import {
   buildFollowUpCopy,
   ensureMutationSuccess,
   resolveEntityId,
@@ -13,13 +17,14 @@ import {
   resolveThemeIds,
   resolveTickerIds,
   type NewsMutationInput,
+  type NewsPatchInput,
 } from "@/lib/server/private-admin";
 import { fetchResearchDataset } from "@/lib/supabase/research";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-function toNewsRow(payload: NewsMutationInput) {
+function toFullNewsRow(payload: NewsMutationInput) {
   return {
     content_type: payload.contentType ?? "news",
     title: payload.title.trim(),
@@ -40,46 +45,80 @@ function toNewsRow(payload: NewsMutationInput) {
   };
 }
 
+function toNewsPatchRow(payload: NewsPatchInput) {
+  const row: Record<string, unknown> = {};
+
+  if (payload.contentType !== undefined) row.content_type = payload.contentType;
+  if (typeof payload.title === "string") row.title = payload.title.trim();
+  if (typeof payload.summary === "string") row.summary = payload.summary.trim();
+  if (typeof payload.sourceName === "string") row.source_name = payload.sourceName.trim();
+  if (typeof payload.sourceUrl === "string") row.source_url = payload.sourceUrl.trim();
+  if (typeof payload.publishedAt === "string") row.published_at = payload.publishedAt;
+  if (payload.scanSlot !== undefined) row.scan_slot = payload.scanSlot;
+  if (payload.region !== undefined) row.region = payload.region;
+  if (Array.isArray(payload.affectedAssetClasses)) {
+    row.affected_asset_classes = payload.affectedAssetClasses;
+  }
+  if (typeof payload.marketInterpretation === "string") {
+    row.market_interpretation = payload.marketInterpretation.trim();
+  }
+  if (payload.directionalView !== undefined) row.directional_view = payload.directionalView;
+  if (typeof payload.actionIdea === "string") row.action_idea = payload.actionIdea.trim();
+  if (payload.followUpStatus !== undefined) row.follow_up_status = payload.followUpStatus;
+  if (typeof payload.followUpNote === "string") row.follow_up_note = payload.followUpNote.trim();
+  if (payload.importance !== undefined) row.importance = payload.importance;
+  if (payload.monitoring !== undefined) {
+    row.content_meta = payload.monitoring ? { monitoring: payload.monitoring } : {};
+  }
+
+  return row;
+}
+
 async function syncNewsRelations(
   client: ReturnType<typeof createServiceRoleSupabaseClient>,
   ownerId: string,
   newsItemId: string,
-  payload: NewsMutationInput,
+  themeIds: string[] | undefined,
+  tickerIds: string[] | undefined,
 ) {
-  const { error: deleteThemeError } = await client
-    .from("news_item_themes")
-    .delete()
-    .eq("owner_id", ownerId)
-    .eq("news_item_id", newsItemId);
-  ensureMutationSuccess(deleteThemeError, "Failed to reset news theme links.");
+  if (themeIds !== undefined) {
+    const { error: deleteThemeError } = await client
+      .from("news_item_themes")
+      .delete()
+      .eq("owner_id", ownerId)
+      .eq("news_item_id", newsItemId);
+    ensureMutationSuccess(deleteThemeError, "Failed to reset news theme links.");
 
-  const { error: deleteTickerError } = await client
-    .from("news_item_tickers")
-    .delete()
-    .eq("owner_id", ownerId)
-    .eq("news_item_id", newsItemId);
-  ensureMutationSuccess(deleteTickerError, "Failed to reset news ticker links.");
-
-  if (payload.relatedThemeIds.length > 0) {
-    const { error } = await client.from("news_item_themes").insert(
-      payload.relatedThemeIds.map((themeId) => ({
-        owner_id: ownerId,
-        news_item_id: newsItemId,
-        theme_id: themeId,
-      })),
-    );
-    ensureMutationSuccess(error, "Failed to save news themes.");
+    if (themeIds.length > 0) {
+      const { error } = await client.from("news_item_themes").insert(
+        themeIds.map((themeId) => ({
+          owner_id: ownerId,
+          news_item_id: newsItemId,
+          theme_id: themeId,
+        })),
+      );
+      ensureMutationSuccess(error, "Failed to save news themes.");
+    }
   }
 
-  if (payload.relatedTickerIds.length > 0) {
-    const { error } = await client.from("news_item_tickers").insert(
-      payload.relatedTickerIds.map((tickerId) => ({
-        owner_id: ownerId,
-        news_item_id: newsItemId,
-        ticker_id: tickerId,
-      })),
-    );
-    ensureMutationSuccess(error, "Failed to save news tickers.");
+  if (tickerIds !== undefined) {
+    const { error: deleteTickerError } = await client
+      .from("news_item_tickers")
+      .delete()
+      .eq("owner_id", ownerId)
+      .eq("news_item_id", newsItemId);
+    ensureMutationSuccess(deleteTickerError, "Failed to reset news ticker links.");
+
+    if (tickerIds.length > 0) {
+      const { error } = await client.from("news_item_tickers").insert(
+        tickerIds.map((tickerId) => ({
+          owner_id: ownerId,
+          news_item_id: newsItemId,
+          ticker_id: tickerId,
+        })),
+      );
+      ensureMutationSuccess(error, "Failed to save news tickers.");
+    }
   }
 }
 
@@ -159,39 +198,83 @@ export async function POST(request: Request) {
         .eq("owner_id", ownerId)
         .eq("id", resolvedId);
       ensureMutationSuccess(error, "Failed to delete news item.");
-    } else {
-      const normalizedPayload: NewsMutationInput = {
-        ...body,
-        relatedThemeIds: await resolveThemeIds(client, ownerId, body.relatedThemeIds),
-        relatedTickerIds: await resolveTickerIds(client, ownerId, body.relatedTickerIds),
-      };
+    } else if (body.id) {
+      // Patch / update existing news item; any subset of fields is allowed.
+      const resolvedId = await resolveEntityId(client, "news_items", ownerId, body.id);
 
-      if (body.id) {
-        const resolvedId = await resolveEntityId(client, "news_items", ownerId, body.id);
+      const themeIds =
+        body.relatedThemeIds && body.relatedThemeIds.length > 0
+          ? await resolveThemeIds(client, ownerId, body.relatedThemeIds)
+          : body.relatedThemeIds;
+      const tickerIds =
+        body.relatedTickerIds && body.relatedTickerIds.length > 0
+          ? await resolveTickerIds(client, ownerId, body.relatedTickerIds)
+          : body.relatedTickerIds;
+
+      const patchRow = toNewsPatchRow(body as NewsPatchInput);
+      if (Object.keys(patchRow).length > 0) {
         const { error } = await client
           .from("news_items")
-          .update(toNewsRow(normalizedPayload))
+          .update(patchRow)
           .eq("owner_id", ownerId)
           .eq("id", resolvedId);
         ensureMutationSuccess(error, "Failed to update news item.");
-        await syncNewsRelations(client, ownerId, resolvedId, normalizedPayload);
-        await syncFollowUp(client, ownerId, resolvedId, normalizedPayload);
-      } else {
-        const { data, error } = await client
-          .from("news_items")
-          .insert({
-            owner_id: ownerId,
-            ...toNewsRow(normalizedPayload),
-          })
-          .select("id")
-          .single();
-        ensureMutationSuccess(error, "Failed to create news item.");
-        if (!data?.id) {
-          throw new Error("Failed to create news item id.");
-        }
+      }
 
-        await syncNewsRelations(client, ownerId, data.id, normalizedPayload);
-        await syncFollowUp(client, ownerId, data.id, normalizedPayload);
+      // Only resync relations if the assistant explicitly sent them.
+      const shouldSyncThemes = Array.isArray(body.relatedThemeIds) && body.relatedThemeIds.length > 0;
+      const shouldSyncTickers = Array.isArray(body.relatedTickerIds) && body.relatedTickerIds.length > 0;
+      await syncNewsRelations(
+        client,
+        ownerId,
+        resolvedId,
+        shouldSyncThemes ? themeIds : undefined,
+        shouldSyncTickers ? tickerIds : undefined,
+      );
+
+      if (body.directionalView && body.followUpStatus !== undefined) {
+        await syncFollowUp(client, ownerId, resolvedId, body as NewsMutationInput);
+      }
+
+      if (body.images && body.images.length > 0) {
+        await attachInitialNewsImages(client, ownerId, resolvedId, body.images);
+      }
+
+      if (body.imageOperations) {
+        await applyNewsImageOperations(client, ownerId, resolvedId, body.imageOperations);
+      }
+    } else {
+      // Create new news item; all required fields enforced by zod.
+      const normalizedPayload: NewsMutationInput = {
+        ...(body as NewsMutationInput),
+        relatedThemeIds: await resolveThemeIds(client, ownerId, body.relatedThemeIds ?? []),
+        relatedTickerIds: await resolveTickerIds(client, ownerId, body.relatedTickerIds ?? []),
+      };
+
+      const { data, error } = await client
+        .from("news_items")
+        .insert({
+          owner_id: ownerId,
+          ...toFullNewsRow(normalizedPayload),
+        })
+        .select("id")
+        .single();
+      ensureMutationSuccess(error, "Failed to create news item.");
+      if (!data?.id) {
+        throw new Error("Failed to create news item id.");
+      }
+
+      await syncNewsRelations(
+        client,
+        ownerId,
+        data.id,
+        normalizedPayload.relatedThemeIds,
+        normalizedPayload.relatedTickerIds,
+      );
+      await syncFollowUp(client, ownerId, data.id, normalizedPayload);
+
+      if (body.images && body.images.length > 0) {
+        await attachInitialNewsImages(client, ownerId, data.id, body.images);
       }
     }
 
