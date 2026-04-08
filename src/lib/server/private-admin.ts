@@ -27,6 +27,8 @@ type IdRow = { id: string };
 type ThemeLookupRow = { id: string; name: string; slug: string };
 type TickerLookupRow = { id: string; symbol: string; name: string };
 
+export type NewsImagePlacement = "gallery" | "inline";
+
 export type NewsImageAttachmentInput = {
   filename?: string;
   contentType?: string;
@@ -36,6 +38,8 @@ export type NewsImageAttachmentInput = {
   isCover?: boolean;
   bufferBase64?: string;
   url?: string;
+  placement?: NewsImagePlacement;
+  anchorKey?: string;
 };
 
 export type NewsImageMetadataPatch = {
@@ -44,6 +48,8 @@ export type NewsImageMetadataPatch = {
   alt?: string;
   order?: number;
   isCover?: boolean;
+  placement?: NewsImagePlacement;
+  anchorKey?: string | null;
 };
 
 export type NewsImageOperationsInput = {

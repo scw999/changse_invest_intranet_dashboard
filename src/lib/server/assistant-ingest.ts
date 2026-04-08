@@ -356,6 +356,19 @@ const newsSortField = z.preprocess(
   z.enum(NEWS_SORT_OPTIONS),
 );
 
+const placementField = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const lower = value.trim().toLowerCase();
+  if (lower === "inline") return "inline";
+  if (lower === "gallery") return "gallery";
+  return value;
+}, z.enum(["gallery", "inline"]).optional());
+
+// Anchor keys flow through as plain optional strings here. The server-side
+// resolver in news-images.ts is the single point of truth for normalization
+// and validation, so we don't double-up the rules.
+const anchorKeyField = optionalTextField;
+
 const imageInputSchema = z.object({
   filename: optionalTextField,
   contentType: optionalTextField,
@@ -365,6 +378,8 @@ const imageInputSchema = z.object({
   isCover: z.preprocess(normalizeBoolean, z.boolean().optional()),
   bufferBase64: optionalTextField,
   url: optionalTextField,
+  placement: placementField,
+  anchorKey: anchorKeyField,
 });
 
 const imageUpdateSchema = z.object({
@@ -373,6 +388,16 @@ const imageUpdateSchema = z.object({
   alt: optionalTextField,
   order: z.preprocess(normalizeNumber, z.number().int().optional()),
   isCover: z.preprocess(normalizeBoolean, z.boolean().optional()),
+  placement: placementField,
+  // Allow explicit null so admins can clear an anchor key.
+  anchorKey: z.preprocess((value) => {
+    if (value === null) return null;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed ? trimmed : null;
+    }
+    return value;
+  }, z.union([z.string(), z.null()]).optional()),
 });
 
 const imageReorderSchema = z.object({

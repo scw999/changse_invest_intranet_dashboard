@@ -63,6 +63,9 @@ export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
 export type NewsSortOption = (typeof NEWS_SORT_OPTIONS)[number];
 export type ContentType = (typeof CONTENT_TYPES)[number];
 
+export const NEWS_IMAGE_PLACEMENTS = ["gallery", "inline"] as const;
+export type NewsImagePlacement = (typeof NEWS_IMAGE_PLACEMENTS)[number];
+
 export type NewsItemImage = {
   id: string;
   url: string;
@@ -72,6 +75,8 @@ export type NewsItemImage = {
   alt: string;
   order: number;
   isCover: boolean;
+  placement: NewsImagePlacement;
+  anchorKey?: string;
   width?: number;
   height?: number;
 };
