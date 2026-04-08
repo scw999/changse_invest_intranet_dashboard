@@ -258,18 +258,121 @@ for that render — it is never silently hidden.
 
 ### Rendering behavior on the detail page
 
-The "시장 해석" section now renders body + inline images **interleaved**:
+The "시장 해석" section now renders body + inline images **interleaved at
+subsection level**, not at section level.
 
-1. The body is parsed into anchored sections by the line-scan parser.
-2. Each section is rendered as `<RichText>`.
+1. The body is parsed into anchored sections by the line-scan parser. Any
+   `{#id}` heading — regardless of level — becomes its own section. Plain
+   headings (no `{#id}`) stay inside the previous section as part of its
+   markdown content.
+2. Each section is rendered as `<RichText>`, wrapped in an HTML
+   `<section id={anchorKey} data-anchor-key={anchorKey}>` element so the URL
+   hash can deep-link to that subsection and so the DOM clearly advertises
+   which image belongs to which anchor.
 3. Immediately after a section, every inline image whose `anchor_key` matches
-   that section's anchor renders as a `<figure>` with caption + alt.
+   that section's anchor renders as a `<figure>` wrapped in a
+   `<div data-image-anchor={anchorKey} data-image-id={imageId}>` for easy
+   inspection.
 4. Multiple inline images can target the same anchor; they render in
    `display_order`.
 5. The bottom "첨부 이미지" section now contains only the **fallback gallery**:
    any image with `placement = 'gallery'`, plus any inline image whose anchor
    could not be resolved against the current body. If the gallery list is
    empty, the entire section is hidden.
+
+### Concrete example
+
+For this body:
+
+```markdown
+## 사실
+### 삼성전자 저평가 논점 {#samsung-valuation}
+삼성전자 관련 본문 A
+
+### 사모대출 불안 {#private-credit-risk}
+사모대출 관련 본문 B
+
+### 트럼프 48시간 발언 {#trump-48h}
+트럼프 관련 본문 C
+```
+
+and these images:
+
+| id | placement | anchorKey |
+|---|---|---|
+| samsung | inline | samsung-valuation |
+| private-credit | inline | private-credit-risk |
+| trump | inline | trump-48h |
+
+the detail page emits (simplified):
+
+```html
+<section> <!-- preamble, no id -->
+  <h2>사실</h2>
+</section>
+
+<section id="samsung-valuation" data-anchor-key="samsung-valuation">
+  <h3>삼성전자 저평가 논점</h3>
+  <p>삼성전자 관련 본문 A</p>
+  <div data-image-anchor="samsung-valuation" data-image-id="samsung">
+    <figure>…samsung.jpg…</figure>
+  </div>
+</section>
+
+<section id="private-credit-risk" data-anchor-key="private-credit-risk">
+  <h3>사모대출 불안</h3>
+  <p>사모대출 관련 본문 B</p>
+  <div data-image-anchor="private-credit-risk" data-image-id="private-credit">
+    <figure>…private-credit.jpg…</figure>
+  </div>
+</section>
+
+<section id="trump-48h" data-anchor-key="trump-48h">
+  <h3>트럼프 48시간 발언</h3>
+  <p>트럼프 관련 본문 C</p>
+  <div data-image-anchor="trump-48h" data-image-id="trump">
+    <figure>…trump.jpg…</figure>
+  </div>
+</section>
+```
+
+This is the exact subsection-level placement specified in the task prompt.
+No hardcoded section names are involved — every `{#id}` in the body becomes
+an independent render target, and every inline image with a matching
+`anchor_key` lands inside that subsection's slot.
+
+### Verifying subsection placement
+
+A permanent integration test lives at
+`scripts/verify-inline-placement.ts`. It exercises the exact parser +
+grouping pipeline the detail page runs at render time. Run it with:
+
+```bash
+npm run verify:images
+```
+
+The test covers six fixtures (17 assertions total):
+
+| Fixture | What it proves |
+|---|---|
+| 1 | The task prompt's exact three-subsection example produces the expected linear render plan. |
+| 2 | A realistic 9-anchor template mixing `##` and `###` places every image under its direct anchor, not under the parent. The preamble preserves `## 상단 요약 카드` and `## 사실`. |
+| 3 | Broken anchors, missing anchors, and plain gallery images all land in the gallery bucket and are never dropped. |
+| 4 | Legacy text-only bodies work — one preamble section, zero anchors. |
+| 5 | Multiple images on the same anchor render in `display_order`. |
+| 6 | `normalizeAnchorKey` handles leading `#`, case, Unicode, empty, illegal characters. |
+
+Example output:
+
+```
+=== Fixture 1: subsection placement (task prompt example) ===
+  ok  parser extracted exactly three anchors from the body
+  ok  render plan has sections in document order
+  ok  images appear immediately after their matching subsection
+  ok  gallery bucket is empty because every image is inline-resolved
+...
+ALL CHECKS PASSED
+```
 
 All examples target `POST /api/internal/ingest/news` with the existing
 `Authorization: Bearer <ASSISTANT_INGEST_TOKEN>` header.

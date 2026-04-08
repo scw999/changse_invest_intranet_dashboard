@@ -272,6 +272,25 @@ export function NewsImageManager({
       ) : null}
 
       {detectedAnchors.length > 0 ? (
+        <div className="rounded-[16px] border border-[rgba(46,106,100,0.18)] bg-[rgba(46,106,100,0.08)] px-3 py-2 text-xs text-[#1d604f]">
+          <p className="font-semibold">
+            본문에서 감지된 anchor {detectedAnchors.length}개
+          </p>
+          <p className="mt-1 text-[var(--text-muted)]">
+            {detectedAnchors
+              .map((anchor) => `#${anchor.anchorKey} (${anchor.heading})`)
+              .join(" · ")}
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-[16px] border border-[var(--border-soft)] bg-white/60 px-3 py-2 text-xs text-[var(--text-muted)]">
+          본문에 <code>{"{#anchor-id}"}</code> 마커가 없습니다. 인라인 배치를 쓰려면 본문 제목에
+          예: <code>### 삼성전자 저평가 논점 {"{#samsung-valuation}"}</code> 처럼 anchor id 를
+          넣어 주세요.
+        </div>
+      )}
+
+      {detectedAnchors.length > 0 ? (
         <datalist id={datalistId}>
           {detectedAnchors.map((anchor) => (
             <option key={anchor.anchorKey} value={anchor.anchorKey}>

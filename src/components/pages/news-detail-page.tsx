@@ -192,23 +192,33 @@ export function NewsDetailPage({ id }: { id: string }) {
       <SectionCard title="시장 해석" description="긴 해석 메모도 markdown 스타일로 읽기 좋게 렌더링합니다.">
         <div className="space-y-4">
           {sections.map((section, idx) => {
-            const inlineImages =
-              section.anchorKey === PREAMBLE_ANCHOR_KEY
-                ? []
-                : inlineImagesByAnchor.get(section.anchorKey) ?? [];
+            const isPreamble = section.anchorKey === PREAMBLE_ANCHOR_KEY;
+            const inlineImages = isPreamble
+              ? []
+              : inlineImagesByAnchor.get(section.anchorKey) ?? [];
 
+            // Anchored subsections get a real HTML `<section id>` so the URL
+            // hash can deep-link to them (e.g. /archive/abc#samsung-valuation)
+            // and so anyone inspecting the DOM can verify which image is
+            // pinned to which anchor via the `data-anchor-key` attribute.
             return (
-              <div key={`${section.anchorKey}-${idx}`}>
+              <section
+                key={`${section.anchorKey}-${idx}`}
+                id={isPreamble ? undefined : section.anchorKey}
+                data-anchor-key={isPreamble ? undefined : section.anchorKey}
+                className="scroll-mt-24"
+              >
                 <RichText content={section.content} />
                 {inlineImages.map((image) => (
-                  <ArticleImage
+                  <div
                     key={image.id}
-                    image={image}
-                    fallbackAlt={displayItem.title}
-                    inline
-                  />
+                    data-image-anchor={section.anchorKey}
+                    data-image-id={image.id}
+                  >
+                    <ArticleImage image={image} fallbackAlt={displayItem.title} inline />
+                  </div>
                 ))}
-              </div>
+              </section>
             );
           })}
         </div>
