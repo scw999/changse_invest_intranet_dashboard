@@ -74,6 +74,24 @@ create table public.news_items (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table public.news_item_images (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid(),
+  news_item_id uuid not null references public.news_items(id) on delete cascade,
+  storage_path text not null,
+  public_url text not null,
+  mime_type text not null default 'image/jpeg',
+  file_size integer,
+  width integer,
+  height integer,
+  caption text not null default '',
+  alt text not null default '',
+  display_order integer not null default 0,
+  is_cover boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 create table public.news_item_themes (
   owner_id uuid not null default auth.uid(),
   news_item_id uuid not null references public.news_items(id) on delete cascade,
@@ -152,6 +170,10 @@ create index idx_portfolio_items_owner_priority on public.portfolio_items (owner
 create index idx_tickers_owner_region on public.tickers (owner_id, region);
 create index idx_news_item_themes_theme on public.news_item_themes (theme_id);
 create index idx_news_item_tickers_ticker on public.news_item_tickers (ticker_id);
+create index idx_news_item_images_owner_news_order
+  on public.news_item_images (owner_id, news_item_id, display_order);
+create index idx_news_item_images_news_id
+  on public.news_item_images (news_item_id);
 
 create trigger set_themes_updated_at
 before update on public.themes
@@ -163,6 +185,10 @@ for each row execute procedure public.set_updated_at();
 
 create trigger set_news_items_updated_at
 before update on public.news_items
+for each row execute procedure public.set_updated_at();
+
+create trigger set_news_item_images_updated_at
+before update on public.news_item_images
 for each row execute procedure public.set_updated_at();
 
 create trigger set_follow_up_records_updated_at
@@ -180,6 +206,7 @@ for each row execute procedure public.set_updated_at();
 alter table public.themes enable row level security;
 alter table public.tickers enable row level security;
 alter table public.news_items enable row level security;
+alter table public.news_item_images enable row level security;
 alter table public.news_item_themes enable row level security;
 alter table public.news_item_tickers enable row level security;
 alter table public.follow_up_records enable row level security;
@@ -194,6 +221,9 @@ create policy "tickers owner access" on public.tickers
 for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
 create policy "news owner access" on public.news_items
+for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+
+create policy "news image owner access" on public.news_item_images
 for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
 create policy "news theme owner access" on public.news_item_themes

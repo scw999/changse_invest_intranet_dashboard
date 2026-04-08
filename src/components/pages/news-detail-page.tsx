@@ -151,6 +151,36 @@ export function NewsDetailPage({ id }: { id: string }) {
         </SectionCard>
       ) : null}
 
+      {item.images && item.images.length > 0 ? (
+        <SectionCard
+          title="첨부 이미지"
+          description="리포트 스크린샷과 참고 이미지를 본문 맥락 안에서 함께 확인할 수 있습니다."
+        >
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {[...item.images]
+              .sort((a, b) => a.order - b.order)
+              .map((image) => (
+                <li
+                  key={image.id}
+                  className="overflow-hidden rounded-[20px] border border-[var(--border-soft)] bg-white/80"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={image.url}
+                    alt={image.alt || image.caption || displayItem.title}
+                    loading="lazy"
+                    decoding="async"
+                    className="block h-auto max-h-[420px] w-full object-cover"
+                  />
+                  {image.caption ? (
+                    <p className="px-4 py-3 text-sm text-[var(--text-muted)]">{image.caption}</p>
+                  ) : null}
+                </li>
+              ))}
+          </ul>
+        </SectionCard>
+      ) : null}
+
       <SectionCard title="시장 해석" description="긴 해석 메모도 markdown 스타일로 읽기 좋게 렌더링합니다.">
         <RichText content={displayItem.marketInterpretation} />
       </SectionCard>
