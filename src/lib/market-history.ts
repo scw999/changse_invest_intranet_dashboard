@@ -36,6 +36,15 @@ function toIsoDate(timestamp: number) {
   return new Date(timestamp * 1000).toISOString().slice(0, 10);
 }
 
+function toStooqSymbol(symbol: string) {
+  const normalized = symbol.trim().toLowerCase();
+  if (normalized.includes('.')) {
+    return normalized;
+  }
+
+  return `${normalized}.us`;
+}
+
 function parseYahooChart(payload: YahooChartResponse): MarketHistoryPoint[] {
   const result = payload.chart?.result?.[0];
   const timestamps = result?.timestamp ?? [];
@@ -44,7 +53,7 @@ function parseYahooChart(payload: YahooChartResponse): MarketHistoryPoint[] {
   return timestamps
     .map((timestamp, index) => {
       const value = closes[index];
-      if (!Number.isFinite(timestamp) || typeof value !== "number" || !Number.isFinite(value)) {
+      if (!Number.isFinite(timestamp) || typeof value !== 'number' || !Number.isFinite(value)) {
         return null;
       }
 
@@ -57,53 +66,109 @@ function parseYahooChart(payload: YahooChartResponse): MarketHistoryPoint[] {
     .slice(-180);
 }
 
+function parseStooqCsv(csv: string): MarketHistoryPoint[] {
+  const lines = csv.trim().split(/\r?\n/);
+  if (lines.length <= 1) {
+    return [];
+  }
+
+  return lines
+    .slice(1)
+    .map((line) => line.split(','))
+    .filter((cols) => cols.length >= 5)
+    .map((cols) => ({
+      time: cols[0]?.trim(),
+      value: Number(cols[4]),
+    }))
+    .filter((point) => point.time && Number.isFinite(point.value));
+}
+
+async function fetchJson(url: URL | string): Promise<{ response: Response; text: string }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+        Accept: 'application/json,text/plain,*/*',
+        'Accept-Language': 'en-US,en;q=0.9,ko-KR;q=0.8,ko;q=0.7',
+        Referer: 'https://finance.yahoo.com/',
+        Origin: 'https://finance.yahoo.com',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    const text = await response.text();
+    return { response, text };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchYahooHistory(symbol: string): Promise<MarketHistoryPoint[]> {
-  const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`);
-  url.searchParams.set("range", "6mo");
-  url.searchParams.set("interval", "1d");
-  url.searchParams.set("includePrePost", "false");
-  url.searchParams.set("events", "div,splits");
+  const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
+  const failures: string[] = [];
 
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-      Accept: "application/json",
-    },
-    next: { revalidate: 60 * 60 },
-  });
+  for (const host of hosts) {
+    const url = new URL(`https://${host}/v8/finance/chart/${encodeURIComponent(symbol)}`);
+    url.searchParams.set('range', '6mo');
+    url.searchParams.set('interval', '1d');
+    url.searchParams.set('includePrePost', 'false');
+    url.searchParams.set('events', 'div,splits');
 
-  if (!response.ok) {
-    throw new Error(`Yahoo Finance returned ${response.status}`);
+    try {
+      const { response, text } = await fetchJson(url);
+      if (!response.ok) {
+        throw new Error(`${host} returned ${response.status}`);
+      }
+
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(`${host} returned non-JSON content-type ${contentType || 'unknown'}`);
+      }
+
+      const payload = JSON.parse(text) as YahooChartResponse;
+      const apiError = payload.chart?.error?.description;
+      if (apiError) {
+        throw new Error(apiError);
+      }
+
+      const history = parseYahooChart(payload);
+      if (history.length === 0) {
+        throw new Error(`Yahoo Finance returned no chart data for ${symbol}`);
+      }
+
+      return history;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${host}: ${message}`);
+    }
   }
 
-  const payload = (await response.json()) as YahooChartResponse;
-  const apiError = payload.chart?.error?.description;
-  if (apiError) {
-    throw new Error(apiError);
-  }
-
-  const history = parseYahooChart(payload);
-  if (history.length === 0) {
-    throw new Error(`Yahoo Finance returned no chart data for ${symbol}`);
-  }
-
-  return history;
+  throw new Error(`Yahoo Finance failed for ${symbol} (${failures.join('; ')})`);
 }
 
 async function fetchNaverHistory(symbol: string): Promise<MarketHistoryPoint[]> {
-  const localCode = symbol.split(".")[0];
+  const localCode = symbol.split('.')[0];
   const pages = await Promise.all(
     [1, 2, 3].map(async (page) => {
       const url = new URL(`https://m.stock.naver.com/api/stock/${localCode}/price`);
-      url.searchParams.set("pageSize", "60");
-      url.searchParams.set("page", String(page));
+      url.searchParams.set('pageSize', '60');
+      url.searchParams.set('page', String(page));
 
       const response = await fetch(url, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-          Accept: "application/json",
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+          Accept: 'application/json',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+          Referer: 'https://m.stock.naver.com/',
+          Origin: 'https://m.stock.naver.com',
         },
-        next: { revalidate: 60 * 60 },
+        cache: 'no-store',
       });
 
       if (!response.ok) {
@@ -118,7 +183,7 @@ async function fetchNaverHistory(symbol: string): Promise<MarketHistoryPoint[]> 
     .flat()
     .map((point) => {
       const time = point.localTradedAt?.trim();
-      const value = Number(point.closePrice?.replaceAll(",", ""));
+      const value = Number(point.closePrice?.replaceAll(',', ''));
       if (!time || !Number.isFinite(value)) {
         return null;
       }
@@ -136,16 +201,49 @@ async function fetchNaverHistory(symbol: string): Promise<MarketHistoryPoint[]> 
   return history;
 }
 
+async function fetchStooqHistory(symbol: string): Promise<MarketHistoryPoint[]> {
+  const stooqSymbol = toStooqSymbol(symbol);
+  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSymbol)}&i=d`;
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+      Accept: 'text/csv,text/plain;q=0.9,*/*;q=0.8',
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Stooq returned ${response.status}`);
+  }
+
+  const csv = await response.text();
+  const history = parseStooqCsv(csv).slice(-180);
+  if (history.length === 0) {
+    throw new Error(`Stooq returned no chart data for ${symbol}`);
+  }
+
+  return history;
+}
+
 export async function fetchTickerHistory(symbol: string): Promise<MarketHistoryPoint[]> {
   const normalizedSymbol = normalizeSymbol(symbol);
+  const providers: Array<{ name: string; fetcher: () => Promise<MarketHistoryPoint[]> }> = [
+    { name: 'Yahoo Finance', fetcher: () => fetchYahooHistory(normalizedSymbol) },
+    ...(isKoreanTicker(normalizedSymbol)
+      ? [{ name: 'Naver Finance', fetcher: () => fetchNaverHistory(normalizedSymbol) }]
+      : []),
+    { name: 'Stooq', fetcher: () => fetchStooqHistory(normalizedSymbol) },
+  ];
+  const failures: string[] = [];
 
-  try {
-    return await fetchYahooHistory(normalizedSymbol);
-  } catch (error) {
-    if (!isKoreanTicker(normalizedSymbol)) {
-      throw error;
+  for (const provider of providers) {
+    try {
+      return await provider.fetcher();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${provider.name}: ${message}`);
     }
-
-    return fetchNaverHistory(normalizedSymbol);
   }
+
+  throw new Error(`Failed to fetch market history for ${normalizedSymbol} (${failures.join('; ')})`);
 }
