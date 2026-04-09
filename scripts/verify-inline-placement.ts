@@ -57,53 +57,65 @@ type RenderStep =
 function planRender(body: string, images: FixtureImage[]) {
   const sorted = [...images].sort((a, b) => a.order - b.order);
   const { sections, anchors } = parseArticleSections(body);
-  const validAnchorKeys = new Set(anchors.map((a) => a.anchorKey));
+
+  const hasSyntheticAnchors =
+    anchors.length > 0 && anchors[0].anchorKey.startsWith("__heading-");
 
   const inlineByAnchor = new Map<string, FixtureImage[]>();
-  const unmatchedImages: FixtureImage[] = [];
-
-  // Tier 1: explicit anchorKey match (regardless of `placement` field).
-  for (const image of sorted) {
-    if (image.anchorKey && validAnchorKeys.has(image.anchorKey)) {
-      const arr = inlineByAnchor.get(image.anchorKey) ?? [];
-      arr.push(image);
-      inlineByAnchor.set(image.anchorKey, arr);
-    } else {
-      unmatchedImages.push(image);
-    }
-  }
-
-  // Tier 2: auto-match remaining images to unclaimed anchors by order.
-  // Only images with NO anchorKey are eligible — broken anchorKeys go to gallery.
-  const unclaimedAnchorKeys = anchors
-    .map((a) => a.anchorKey)
-    .filter((key) => !inlineByAnchor.has(key));
-
-  const autoEligible: FixtureImage[] = [];
   const gallery: FixtureImage[] = [];
 
-  for (const image of unmatchedImages) {
-    if (!image.anchorKey) {
-      autoEligible.push(image);
-    } else {
-      gallery.push(image);
+  if (hasSyntheticAnchors) {
+    // Fallback mode: body has plain headings, no {#id} markers.
+    // Distribute ALL images to heading sections by display order.
+    const sectionKeys = anchors.map((a) => a.anchorKey);
+    const matchCount = Math.min(sectionKeys.length, sorted.length);
+    for (let i = 0; i < matchCount; i++) {
+      inlineByAnchor.set(sectionKeys[i], [sorted[i]]);
     }
-  }
-
-  if (unclaimedAnchorKeys.length > 0 && autoEligible.length > 0) {
-    const autoMatchCount = Math.min(unclaimedAnchorKeys.length, autoEligible.length);
-    for (let i = 0; i < autoMatchCount; i++) {
-      const anchorKey = unclaimedAnchorKeys[i];
-      const image = autoEligible[i];
-      const bucket = inlineByAnchor.get(anchorKey) ?? [];
-      bucket.push(image);
-      inlineByAnchor.set(anchorKey, bucket);
-    }
-    for (let i = autoMatchCount; i < autoEligible.length; i++) {
-      gallery.push(autoEligible[i]);
+    for (let i = matchCount; i < sorted.length; i++) {
+      gallery.push(sorted[i]);
     }
   } else {
-    gallery.push(...autoEligible);
+    // Normal mode: body has explicit {#id} anchors.
+    const validAnchorKeys = new Set(anchors.map((a) => a.anchorKey));
+    const unmatchedImages: FixtureImage[] = [];
+
+    for (const image of sorted) {
+      if (image.anchorKey && validAnchorKeys.has(image.anchorKey)) {
+        const arr = inlineByAnchor.get(image.anchorKey) ?? [];
+        arr.push(image);
+        inlineByAnchor.set(image.anchorKey, arr);
+      } else {
+        unmatchedImages.push(image);
+      }
+    }
+
+    const unclaimedAnchorKeys = anchors
+      .map((a) => a.anchorKey)
+      .filter((key) => !inlineByAnchor.has(key));
+
+    const autoEligible: FixtureImage[] = [];
+    for (const image of unmatchedImages) {
+      if (!image.anchorKey) {
+        autoEligible.push(image);
+      } else {
+        gallery.push(image);
+      }
+    }
+
+    if (unclaimedAnchorKeys.length > 0 && autoEligible.length > 0) {
+      const autoMatchCount = Math.min(unclaimedAnchorKeys.length, autoEligible.length);
+      for (let i = 0; i < autoMatchCount; i++) {
+        const bucket = inlineByAnchor.get(unclaimedAnchorKeys[i]) ?? [];
+        bucket.push(autoEligible[i]);
+        inlineByAnchor.set(unclaimedAnchorKeys[i], bucket);
+      }
+      for (let i = autoMatchCount; i < autoEligible.length; i++) {
+        gallery.push(autoEligible[i]);
+      }
+    } else {
+      gallery.push(...autoEligible);
+    }
   }
 
   const plan: RenderStep[] = [];
@@ -586,6 +598,100 @@ check("render plan: explicit→samsung, auto1→private-credit, auto2→trump", 
     "auto1@private-credit-risk",
     "auto2@trump-48h",
   ]);
+});
+
+// ---------------------------------------------------------------------------
+// Fixture 9: PLAIN HEADINGS (no {#id} markers at all)
+//
+// This is the critical real-world scenario: the article body has standard
+// markdown headings like `### 삼성전자 저평가 논점` WITHOUT any `{#id}`
+// anchor syntax. The parser falls back to splitting on plain headings and
+// generating synthetic anchor keys. The renderer distributes ALL images to
+// heading sections by display order.
+// ---------------------------------------------------------------------------
+
+banner("Fixture 9: plain headings (no {#id} markers)");
+
+const body9 = `## 상단 요약
+핵심 내용
+
+### 삼성전자 저평가 논점
+삼성전자 관련 본문 A
+
+### 사모대출 불안
+사모대출 관련 본문 B
+
+### 트럼프 48시간 발언
+트럼프 관련 본문 C`;
+
+const images9: FixtureImage[] = [
+  { id: "samsung", placement: "inline", anchorKey: "samsung-valuation", order: 1 },
+  { id: "private-credit", placement: "gallery", anchorKey: "private-credit-risk", order: 2 },
+  { id: "trump", placement: "gallery", order: 3 },
+];
+
+const result9 = planRender(body9, images9);
+
+check("parser detects 4 plain headings (## + 3x ###) as synthetic anchors", () => {
+  assert.equal(result9.anchors.length, 4);
+  assert.ok(result9.anchors[0].anchorKey.startsWith("__heading-"));
+  assert.equal(result9.anchors[0].heading, "상단 요약");
+  assert.equal(result9.anchors[1].heading, "삼성전자 저평가 논점");
+  assert.equal(result9.anchors[2].heading, "사모대출 불안");
+  assert.equal(result9.anchors[3].heading, "트럼프 48시간 발언");
+});
+
+check("all 3 images render inline under plain-heading sections", () => {
+  const imageSteps = result9.plan.filter((s) => s.kind === "image");
+  assert.equal(imageSteps.length, 3);
+});
+
+check("gallery is empty", () => {
+  assert.deepEqual(result9.gallery, []);
+});
+
+check("images are distributed by order to heading sections", () => {
+  // Image 1 → heading-0 (상단 요약), Image 2 → heading-1 (삼성), Image 3 → heading-2 (사모)
+  const sectionImagePairs: string[] = [];
+  let currentHeading = "";
+  for (const step of result9.plan) {
+    if (step.kind === "section") {
+      currentHeading = step.heading;
+    } else {
+      sectionImagePairs.push(`${step.id}→${currentHeading}`);
+    }
+  }
+  assert.deepEqual(sectionImagePairs, [
+    "samsung→상단 요약",
+    "private-credit→삼성전자 저평가 논점",
+    "trump→사모대출 불안",
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// Fixture 10: plain headings with MORE images than headings → overflow to gallery
+// ---------------------------------------------------------------------------
+
+banner("Fixture 10: plain headings with overflow");
+
+const body10 = `### A
+text a
+### B
+text b`;
+
+const images10: FixtureImage[] = [
+  { id: "i1", placement: "gallery", order: 1 },
+  { id: "i2", placement: "gallery", order: 2 },
+  { id: "i3", placement: "gallery", order: 3 },
+];
+
+const result10 = planRender(body10, images10);
+
+check("2 images inline, 1 overflow to gallery", () => {
+  const inlineCount = result10.plan.filter((s) => s.kind === "image").length;
+  assert.equal(inlineCount, 2);
+  assert.equal(result10.gallery.length, 1);
+  assert.equal(result10.gallery[0].id, "i3");
 });
 
 // ---------------------------------------------------------------------------

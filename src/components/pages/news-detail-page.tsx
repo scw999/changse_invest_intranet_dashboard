@@ -73,73 +73,82 @@ export function NewsDetailPage({ id }: { id: string }) {
   // ---------------------------------------------------------------------------
   // Image → anchor resolution.
   //
-  // Three tiers, evaluated in order. Each tier claims images that match; once
-  // claimed, an image is never re-evaluated by a lower tier.
+  // The parser may return explicit `{#id}` anchors (Pass 1) or synthetic
+  // `__heading-N__` anchors from plain headings (Pass 2 fallback). The
+  // resolution strategy adapts accordingly.
   //
-  // Tier 1 – explicit: image.anchorKey matches an anchor in the body.
-  //   This covers both `placement:"inline"` AND images that have an anchorKey
-  //   but whose `placement` field was never flipped to "inline" (a common edge
-  //   case caused by the server's `resolvePlacement` historically discarding
-  //   the anchor when `placement !== "inline"`).
+  // When the body has EXPLICIT anchors:
+  //   Tier 1 – image.anchorKey matches an anchor → inline.
+  //   Tier 2 – images with NO anchorKey → auto-distribute to unclaimed
+  //            anchors by order.
+  //   Tier 3 – everything else → gallery.
   //
-  // Tier 2 – auto-match by order: if the body has unclaimed anchored
-  //   subsections and there are remaining images without an explicit anchorKey,
-  //   distribute them to the unclaimed anchors in display-order. This covers
-  //   images that were uploaded without any inline metadata at all — the most
-  //   common real-world scenario when images arrive through the assistant
-  //   ingest or bulk upload path.
-  //
-  // Tier 3 – gallery fallback: everything else.
+  // When the body has only PLAIN-HEADING (synthetic) anchors:
+  //   No image anchorKey can match a synthetic key, so Tier 1 is always
+  //   empty. ALL images are distributed to heading sections by order.
+  //   Overflow images → gallery.
   // ---------------------------------------------------------------------------
+  const hasSyntheticAnchors =
+    anchors.length > 0 && anchors[0].anchorKey.startsWith("__heading-");
+
   const validAnchorKeys = new Set(anchors.map((anchor) => anchor.anchorKey));
   const inlineImagesByAnchor = new Map<string, NewsItemImage[]>();
-  const unmatchedImages: NewsItemImage[] = [];
-
-  // Tier 1: explicit anchorKey match (regardless of `placement` field).
-  for (const image of allImages) {
-    if (image.anchorKey && validAnchorKeys.has(image.anchorKey)) {
-      const bucket = inlineImagesByAnchor.get(image.anchorKey) ?? [];
-      bucket.push(image);
-      inlineImagesByAnchor.set(image.anchorKey, bucket);
-    } else {
-      unmatchedImages.push(image);
-    }
-  }
-
-  // Tier 2: auto-match remaining images to unclaimed anchors by order.
-  // Only images with NO anchorKey are eligible — an image with a broken
-  // anchorKey (non-null but not in the body) was targeted at a specific
-  // location and should not be silently relocated to a random anchor.
-  const unclaimedAnchorKeys = anchors
-    .map((a) => a.anchorKey)
-    .filter((key) => !inlineImagesByAnchor.has(key));
-
-  const autoEligible: NewsItemImage[] = [];
   const galleryImages: NewsItemImage[] = [];
 
-  for (const image of unmatchedImages) {
-    if (!image.anchorKey) {
-      autoEligible.push(image);
-    } else {
-      // Broken anchorKey → gallery (never silently relocated).
-      galleryImages.push(image);
+  if (hasSyntheticAnchors) {
+    // Fallback mode: body has plain headings, no `{#id}` markers.
+    // Distribute ALL images to heading sections by display order.
+    const sectionKeys = anchors.map((a) => a.anchorKey);
+    const matchCount = Math.min(sectionKeys.length, allImages.length);
+    for (let i = 0; i < matchCount; i++) {
+      inlineImagesByAnchor.set(sectionKeys[i], [allImages[i]]);
     }
-  }
-
-  if (unclaimedAnchorKeys.length > 0 && autoEligible.length > 0) {
-    const autoMatchCount = Math.min(unclaimedAnchorKeys.length, autoEligible.length);
-    for (let i = 0; i < autoMatchCount; i++) {
-      const anchorKey = unclaimedAnchorKeys[i];
-      const image = autoEligible[i];
-      const bucket = inlineImagesByAnchor.get(anchorKey) ?? [];
-      bucket.push(image);
-      inlineImagesByAnchor.set(anchorKey, bucket);
-    }
-    for (let i = autoMatchCount; i < autoEligible.length; i++) {
-      galleryImages.push(autoEligible[i]);
+    for (let i = matchCount; i < allImages.length; i++) {
+      galleryImages.push(allImages[i]);
     }
   } else {
-    galleryImages.push(...autoEligible);
+    // Normal mode: body has explicit `{#id}` anchors.
+    const unmatchedImages: NewsItemImage[] = [];
+
+    // Tier 1: explicit anchorKey match (regardless of `placement` field).
+    for (const image of allImages) {
+      if (image.anchorKey && validAnchorKeys.has(image.anchorKey)) {
+        const bucket = inlineImagesByAnchor.get(image.anchorKey) ?? [];
+        bucket.push(image);
+        inlineImagesByAnchor.set(image.anchorKey, bucket);
+      } else {
+        unmatchedImages.push(image);
+      }
+    }
+
+    // Tier 2: auto-match remaining images to unclaimed anchors by order.
+    const unclaimedAnchorKeys = anchors
+      .map((a) => a.anchorKey)
+      .filter((key) => !inlineImagesByAnchor.has(key));
+
+    const autoEligible: NewsItemImage[] = [];
+
+    for (const image of unmatchedImages) {
+      if (!image.anchorKey) {
+        autoEligible.push(image);
+      } else {
+        galleryImages.push(image);
+      }
+    }
+
+    if (unclaimedAnchorKeys.length > 0 && autoEligible.length > 0) {
+      const autoMatchCount = Math.min(unclaimedAnchorKeys.length, autoEligible.length);
+      for (let i = 0; i < autoMatchCount; i++) {
+        const bucket = inlineImagesByAnchor.get(unclaimedAnchorKeys[i]) ?? [];
+        bucket.push(autoEligible[i]);
+        inlineImagesByAnchor.set(unclaimedAnchorKeys[i], bucket);
+      }
+      for (let i = autoMatchCount; i < autoEligible.length; i++) {
+        galleryImages.push(autoEligible[i]);
+      }
+    } else {
+      galleryImages.push(...autoEligible);
+    }
   }
 
   return (
