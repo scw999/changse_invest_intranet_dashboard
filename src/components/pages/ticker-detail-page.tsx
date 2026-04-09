@@ -12,8 +12,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { RichText } from "@/components/ui/rich-text";
 import { SectionCard } from "@/components/ui/section-card";
 import { getDisplayNewsItem, getDisplayTheme, getDisplayTicker } from "@/lib/content-kr";
-import { buildArchiveHref } from "@/lib/navigation";
 import { assetClassLabels, regionLabels } from "@/lib/localize";
+import { normalizeRepresentativeMarketSymbol } from "@/lib/market-symbols";
+import { buildArchiveHref } from "@/lib/navigation";
 import { groupById } from "@/lib/selectors";
 import { useResearchStore } from "@/lib/store/research-store";
 import type { ResearchDataset } from "@/types/research";
@@ -39,7 +40,8 @@ export function TickerDetailPage({
     ? storePortfolioItems
     : (fallbackDataset?.portfolioItems ?? []);
 
-  const ticker = tickers.find((entry) => entry.symbol === decodeURIComponent(symbol));
+  const requestedSymbol = normalizeRepresentativeMarketSymbol(decodeURIComponent(symbol));
+  const ticker = tickers.find((entry) => entry.symbol === requestedSymbol);
   const themeMap = groupById(themes);
   const tickerMap = groupById(tickers);
 

@@ -1,3 +1,4 @@
+import { DEFAULT_CRYPTO_TICKERS } from "@/lib/default-crypto-tickers";
 import type { ResearchDataset } from "@/types/research";
 
 export const mockResearchDataset: ResearchDataset = {
@@ -194,14 +195,15 @@ export const mockResearchDataset: ResearchDataset = {
       assetClass: "Equities",
       note: "Defense export beneficiary tied to multi-year procurement pipelines.",
     },
+    ...DEFAULT_CRYPTO_TICKERS,
     {
-      id: "ticker-btc",
-      symbol: "BTC-USD",
-      name: "Bitcoin",
+      id: "ticker-eth",
+      symbol: "ETH-USD",
+      name: "Ethereum",
       exchange: "Crypto",
       region: "GLOBAL",
       assetClass: "Crypto",
-      note: "Sentiment and liquidity-sensitive macro risk barometer.",
+      note: "Smart-contract layer proxy for DeFi activity and on-chain fee momentum.",
     },
     {
       id: "ticker-kodex200",

@@ -1,3 +1,5 @@
+import { normalizeRepresentativeMarketSymbol } from "@/lib/market-symbols";
+
 export type MarketHistoryPoint = {
   time: string;
   value: number;
@@ -36,11 +38,15 @@ type NasdaqHistoricalResponse = {
 };
 
 function normalizeSymbol(symbol: string) {
-  return symbol.trim().toUpperCase();
+  return normalizeRepresentativeMarketSymbol(symbol);
 }
 
 function isKoreanTicker(symbol: string) {
   return /^\d{6}\.(KS|KQ)$/.test(symbol);
+}
+
+function isCryptoTicker(symbol: string) {
+  return /^[A-Z]+-USD$/i.test(symbol);
 }
 
 function toIsoDate(timestamp: number) {
@@ -323,10 +329,12 @@ export async function fetchTickerHistory(symbol: string): Promise<MarketHistoryP
   const normalizedSymbol = normalizeSymbol(symbol);
   const providers: Array<{ name: string; fetcher: () => Promise<MarketHistoryPoint[]> }> = [
     { name: 'Yahoo Finance', fetcher: () => fetchYahooHistory(normalizedSymbol) },
-    ...(isKoreanTicker(normalizedSymbol)
-      ? [{ name: 'Naver Finance', fetcher: () => fetchNaverHistory(normalizedSymbol) }]
-      : [{ name: 'Nasdaq', fetcher: () => fetchNasdaqHistory(normalizedSymbol) }]),
-    { name: 'Stooq', fetcher: () => fetchStooqHistory(normalizedSymbol) },
+    ...(isCryptoTicker(normalizedSymbol)
+      ? []
+      : isKoreanTicker(normalizedSymbol)
+        ? [{ name: 'Naver Finance', fetcher: () => fetchNaverHistory(normalizedSymbol) }]
+        : [{ name: 'Nasdaq', fetcher: () => fetchNasdaqHistory(normalizedSymbol) },
+           { name: 'Stooq', fetcher: () => fetchStooqHistory(normalizedSymbol) }]),
   ];
   const failures: string[] = [];
 

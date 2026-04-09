@@ -83,6 +83,9 @@ const tickerOverrides: Record<string, Partial<Ticker>> = {
   "ticker-btc": {
     note: "유동성과 위험선호의 온도를 빠르게 보여주는 대표 가상자산입니다.",
   },
+  "ticker-eth": {
+    note: "DeFi 활동과 온체인 수수료 흐름을 반영하는 스마트컨트랙트 대표 자산입니다.",
+  },
   "ticker-kodex200": {
     note: "국내 정책 기대와 수출 모멘텀을 광범위하게 담는 한국 대표 ETF입니다.",
   },
