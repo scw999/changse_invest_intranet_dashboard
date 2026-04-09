@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { mergeDefaultCryptoTickers } from "@/lib/default-crypto-tickers";
 import type { ResearchDataset, StrategyLabel } from "@/types/research";
 
 type ThemeRow = {
@@ -215,15 +216,17 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
       priority: row.priority,
       color: row.color,
     })),
-    tickers: ((tickersResult.data ?? []) as TickerRow[]).map((row) => ({
-      id: row.id,
-      symbol: row.symbol,
-      name: row.name,
-      exchange: row.exchange,
-      region: row.region,
-      assetClass: row.asset_class,
-      note: row.note,
-    })),
+    tickers: mergeDefaultCryptoTickers(
+      ((tickersResult.data ?? []) as TickerRow[]).map((row) => ({
+        id: row.id,
+        symbol: row.symbol,
+        name: row.name,
+        exchange: row.exchange,
+        region: row.region,
+        assetClass: row.asset_class,
+        note: row.note,
+      })),
+    ),
     newsItems: ((newsResult.data ?? []) as NewsRow[]).map((row) => {
       const imageRows = imagesByNews.get(row.id) ?? [];
       const images = imageRows.map((imageRow) => ({

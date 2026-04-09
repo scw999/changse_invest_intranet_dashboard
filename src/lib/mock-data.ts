@@ -197,15 +197,6 @@ export const mockResearchDataset: ResearchDataset = {
     },
     ...DEFAULT_CRYPTO_TICKERS,
     {
-      id: "ticker-eth",
-      symbol: "ETH-USD",
-      name: "Ethereum",
-      exchange: "Crypto",
-      region: "GLOBAL",
-      assetClass: "Crypto",
-      note: "Smart-contract layer proxy for DeFi activity and on-chain fee momentum.",
-    },
-    {
       id: "ticker-kodex200",
       symbol: "069500.KS",
       name: "KODEX 200",
