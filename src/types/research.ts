@@ -66,6 +66,10 @@ export type ContentType = (typeof CONTENT_TYPES)[number];
 export const NEWS_IMAGE_PLACEMENTS = ["gallery", "inline"] as const;
 export type NewsImagePlacement = (typeof NEWS_IMAGE_PLACEMENTS)[number];
 
+// Backward-compatible aliases for older imports still used across the codebase.
+export const IMAGE_PLACEMENTS = NEWS_IMAGE_PLACEMENTS;
+export type ImagePlacement = NewsImagePlacement;
+
 export type NewsItemImage = {
   id: string;
   url: string;
@@ -79,6 +83,12 @@ export type NewsItemImage = {
   anchorKey?: string;
   width?: number;
   height?: number;
+};
+
+// Backward-compatible structural alias for older code paths.
+export type ImageAttachment = NewsItemImage & {
+  filename?: string;
+  contentType?: string;
 };
 
 export type MonitoringMeta = {

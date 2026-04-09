@@ -15,7 +15,7 @@ import {
 } from "@/components/research/research-badges";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { InlineImageGroup, NewsImageGallery } from "@/components/ui/news-image";
+import { NewsImageGallery } from "@/components/ui/news-image";
 import { RichText } from "@/components/ui/rich-text";
 import { SectionCard } from "@/components/ui/section-card";
 import {
@@ -260,11 +260,10 @@ export function NewsDetailPage({ id }: { id: string }) {
               </div>
             </div>
           </div>
-          <InlineImageGroup images={inlineBySection.get("monitoring") ?? []} />
         </SectionCard>
       ) : null}
 
-      <SectionCard title="시장 해석" description="긴 해석 메모도 markdown 스타일로 읽기 좋게 렌더링합니다.">
+      <SectionCard title="시장 해석">
         <div
           className="space-y-4"
           data-anchor-count={anchors.length}
@@ -303,34 +302,12 @@ export function NewsDetailPage({ id }: { id: string }) {
         </div>
       </SectionCard>
 
-      {galleryImages.length > 0 ? (
-        <SectionCard
-          title="첨부 이미지"
-          description="본문 인라인 위치가 지정되지 않은 첨부 이미지를 갤러리 형태로 모아 보여줍니다."
-        >
-          <ul className="grid gap-4 sm:grid-cols-2">
-            {galleryImages.map((image) => (
-              <li
-                key={image.id}
-                data-image-id={image.id}
-                data-image-placement={image.placement}
-                data-image-anchor={image.anchorKey ?? "none"}
-              >
-                <ArticleImage image={image} fallbackAlt={displayItem.title} />
-              </li>
-            ))}
-          </ul>
-        </SectionCard>
-      ) : null}
-
-      <SectionCard title="액션 아이디어" description="의견형 기록은 가설, 비중 판단, 실행 아이디어가 잘 읽히도록 간격을 넉넉히 둡니다.">
+      <SectionCard title="액션 아이디어">
         <RichText content={displayItem.actionIdea} />
-        <InlineImageGroup images={inlineBySection.get("action-idea") ?? []} />
       </SectionCard>
 
       <SectionCard title="후속 메모">
         <RichText content={displayItem.followUpNote} />
-        <InlineImageGroup images={inlineBySection.get("follow-up") ?? []} />
         {followUp ? (
           <div className="mt-5">
             <Link
@@ -343,9 +320,20 @@ export function NewsDetailPage({ id }: { id: string }) {
         ) : null}
       </SectionCard>
 
-      {galleryFallbackImages.length > 0 ? (
+      {galleryImages.length > 0 ? (
         <SectionCard title="첨부 이미지">
-          <NewsImageGallery images={galleryFallbackImages} />
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {galleryImages.map((image) => (
+              <li
+                key={image.id}
+                data-image-id={image.id}
+                data-image-placement={image.placement}
+                data-image-anchor={image.anchorKey ?? "none"}
+              >
+                <ArticleImage image={image} fallbackAlt={displayItem.title} />
+              </li>
+            ))}
+          </ul>
         </SectionCard>
       ) : null}
     </div>

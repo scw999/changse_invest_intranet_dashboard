@@ -16,7 +16,7 @@ export const NewsImage = memo(function NewsImage({ image, priority = false }: Ne
       <div className="relative aspect-video w-full">
         <Image
           src={image.url}
-          alt={image.alt || image.caption || image.filename}
+          alt={image.alt || image.caption || image.filename || "attached image"}
           fill
           sizes="(max-width: 768px) 100vw, 720px"
           className="object-contain"

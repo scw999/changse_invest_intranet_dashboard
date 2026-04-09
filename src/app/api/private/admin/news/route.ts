@@ -6,6 +6,7 @@ import {
   applyNewsImageOperations,
   attachInitialNewsImages,
 } from "@/lib/server/news-images";
+import { buildContentMeta } from "@/lib/server/image-storage";
 import { fetchResearchDataset } from "@/lib/supabase/research";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import {
@@ -16,8 +17,6 @@ import {
   type NewsImageOperationsInput,
   type NewsMutationInput,
 } from "@/lib/server/private-admin";
-import { fetchResearchDataset } from "@/lib/supabase/research";
-import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { ImageAttachment } from "@/types/research";
 
 type AdminNewsRequestBody = Partial<NewsMutationInput> & {
