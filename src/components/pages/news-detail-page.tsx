@@ -71,33 +71,41 @@ export function NewsDetailPage({ id }: { id: string }) {
   const { sections, anchors } = parseArticleSections(articleBody);
 
   // ---------------------------------------------------------------------------
-  // Image → anchor resolution.
+  // Image → section resolution.
   //
-  // The parser may return explicit `{#id}` anchors (Pass 1) or synthetic
-  // `__heading-N__` anchors from plain headings (Pass 2 fallback). The
-  // resolution strategy adapts accordingly.
+  // The strategy adapts to the article's structure:
   //
-  // When the body has EXPLICIT anchors:
-  //   Tier 1 – image.anchorKey matches an anchor → inline.
-  //   Tier 2 – images with NO anchorKey → auto-distribute to unclaimed
-  //            anchors by order.
-  //   Tier 3 – everything else → gallery.
+  // A) Body has explicit `{#id}` anchored subsections:
+  //    Tier 1 – image.anchorKey matches an anchor → inline.
+  //    Tier 2 – images with NO anchorKey → auto-distribute to unclaimed
+  //             anchors by order.
+  //    Tier 3 – everything else → gallery.
   //
-  // When the body has only PLAIN-HEADING (synthetic) anchors:
-  //   No image anchorKey can match a synthetic key, so Tier 1 is always
-  //   empty. ALL images are distributed to heading sections by order.
-  //   Overflow images → gallery.
+  // B) Body has plain-heading (synthetic `__heading-N__`) subsections:
+  //    ALL images distributed to heading sections by order.
+  //    Overflow → gallery.
+  //
+  // C) Body has NO subsections at all (preamble only):
+  //    ALL images render inline after the preamble text, inside the
+  //    "시장 해석" section. Nothing goes to the gallery. This is the
+  //    most common real-world case: the assistant produces a flat
+  //    paragraph and attaches images.
   // ---------------------------------------------------------------------------
   const hasSyntheticAnchors =
     anchors.length > 0 && anchors[0].anchorKey.startsWith("__heading-");
+  const isPreambleOnly =
+    anchors.length === 0 && sections.length === 1 && sections[0].anchorKey === PREAMBLE_ANCHOR_KEY;
 
   const validAnchorKeys = new Set(anchors.map((anchor) => anchor.anchorKey));
   const inlineImagesByAnchor = new Map<string, NewsItemImage[]>();
   const galleryImages: NewsItemImage[] = [];
 
-  if (hasSyntheticAnchors) {
-    // Fallback mode: body has plain headings, no `{#id}` markers.
-    // Distribute ALL images to heading sections by display order.
+  if (isPreambleOnly && allImages.length > 0) {
+    // Case C: flat body, no headings. Render all images inline after the
+    // preamble text inside "시장 해석".
+    inlineImagesByAnchor.set(PREAMBLE_ANCHOR_KEY, allImages);
+  } else if (hasSyntheticAnchors) {
+    // Case B: body has plain headings, no {#id} markers.
     const sectionKeys = anchors.map((a) => a.anchorKey);
     const matchCount = Math.min(sectionKeys.length, allImages.length);
     for (let i = 0; i < matchCount; i++) {
@@ -107,7 +115,7 @@ export function NewsDetailPage({ id }: { id: string }) {
       galleryImages.push(allImages[i]);
     }
   } else {
-    // Normal mode: body has explicit `{#id}` anchors.
+    // Case A: body has explicit {#id} anchors.
     const unmatchedImages: NewsItemImage[] = [];
 
     // Tier 1: explicit anchorKey match (regardless of `placement` field).
@@ -269,9 +277,7 @@ export function NewsDetailPage({ id }: { id: string }) {
         >
           {sections.map((section, idx) => {
             const isPreamble = section.anchorKey === PREAMBLE_ANCHOR_KEY;
-            const inlineImages = isPreamble
-              ? []
-              : inlineImagesByAnchor.get(section.anchorKey) ?? [];
+            const inlineImages = inlineImagesByAnchor.get(section.anchorKey) ?? [];
 
             // Anchored subsections get a real HTML `<section id>` so the URL
             // hash can deep-link to them (e.g. /archive/abc#samsung-valuation)
