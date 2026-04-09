@@ -6,6 +6,11 @@ import {
   internalNewsIngestSchema,
 } from "@/lib/server/assistant-ingest";
 import {
+  applyImageOperations,
+  buildContentMeta,
+  processNewImages,
+} from "@/lib/server/image-storage";
+import {
   buildFollowUpCopy,
   ensureMutationSuccess,
   resolveEntityId,
@@ -16,10 +21,11 @@ import {
 } from "@/lib/server/private-admin";
 import { fetchResearchDataset } from "@/lib/supabase/research";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import type { ImageAttachment } from "@/types/research";
 
 export const dynamic = "force-dynamic";
 
-function toNewsRow(payload: NewsMutationInput) {
+function toNewsRow(payload: NewsMutationInput, images?: ImageAttachment[]) {
   return {
     content_type: payload.contentType ?? "news",
     title: payload.title.trim(),
@@ -36,7 +42,7 @@ function toNewsRow(payload: NewsMutationInput) {
     follow_up_status: payload.followUpStatus,
     follow_up_note: payload.followUpNote.trim(),
     importance: payload.importance,
-    content_meta: payload.monitoring ? { monitoring: payload.monitoring } : {},
+    content_meta: buildContentMeta(payload.monitoring, images),
   };
 }
 
@@ -160,24 +166,35 @@ export async function POST(request: Request) {
         .eq("id", resolvedId);
       ensureMutationSuccess(error, "Failed to delete news item.");
     } else {
+      const { images: rawImages, imageOperations: rawImageOps, ...restBody } = body;
       const normalizedPayload: NewsMutationInput = {
-        ...body,
+        ...restBody,
         relatedThemeIds: await resolveThemeIds(client, ownerId, body.relatedThemeIds),
         relatedTickerIds: await resolveTickerIds(client, ownerId, body.relatedTickerIds),
       };
 
       if (body.id) {
         const resolvedId = await resolveEntityId(client, "news_items", ownerId, body.id);
+
+        let images: ImageAttachment[] = normalizedPayload.images ?? [];
+        if (rawImages && rawImages.length > 0) {
+          const newImages = await processNewImages(client, ownerId, resolvedId, rawImages);
+          images = [...images.filter((img) => !newImages.some((n) => n.filename === img.filename)), ...newImages];
+        }
+        if (rawImageOps && rawImageOps.length > 0) {
+          images = await applyImageOperations(client, ownerId, resolvedId, images, rawImageOps);
+        }
+
         const { error } = await client
           .from("news_items")
-          .update(toNewsRow(normalizedPayload))
+          .update(toNewsRow(normalizedPayload, images))
           .eq("owner_id", ownerId)
           .eq("id", resolvedId);
         ensureMutationSuccess(error, "Failed to update news item.");
         await syncNewsRelations(client, ownerId, resolvedId, normalizedPayload);
         await syncFollowUp(client, ownerId, resolvedId, normalizedPayload);
       } else {
-        const { data, error } = await client
+        const { data, error: insertError } = await client
           .from("news_items")
           .insert({
             owner_id: ownerId,
@@ -185,9 +202,19 @@ export async function POST(request: Request) {
           })
           .select("id")
           .single();
-        ensureMutationSuccess(error, "Failed to create news item.");
+        ensureMutationSuccess(insertError, "Failed to create news item.");
         if (!data?.id) {
           throw new Error("Failed to create news item id.");
+        }
+
+        if (rawImages && rawImages.length > 0) {
+          const images = await processNewImages(client, ownerId, data.id, rawImages);
+          const { error: metaError } = await client
+            .from("news_items")
+            .update({ content_meta: buildContentMeta(normalizedPayload.monitoring, images) })
+            .eq("owner_id", ownerId)
+            .eq("id", data.id);
+          ensureMutationSuccess(metaError, "Failed to save image metadata.");
         }
 
         await syncNewsRelations(client, ownerId, data.id, normalizedPayload);

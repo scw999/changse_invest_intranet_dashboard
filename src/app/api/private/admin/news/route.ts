@@ -2,14 +2,16 @@ import { NextResponse } from "next/server";
 
 import { requireAdminRouteRequest } from "@/lib/auth/route";
 import { getViewer } from "@/lib/auth/session";
-import { fetchResearchDataset } from "@/lib/supabase/research";
-import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { buildContentMeta } from "@/lib/server/image-storage";
 import {
   buildFollowUpCopy,
   ensureMutationSuccess,
   resolveResearchOwnerId,
   type NewsMutationInput,
 } from "@/lib/server/private-admin";
+import { fetchResearchDataset } from "@/lib/supabase/research";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import type { ImageAttachment } from "@/types/research";
 
 async function readBody(request: Request) {
   return (await request.json().catch(() => null)) as
@@ -146,7 +148,7 @@ function toNewsRow(payload: NewsMutationInput) {
     follow_up_status: payload.followUpStatus,
     follow_up_note: payload.followUpNote.trim(),
     importance: payload.importance,
-    content_meta: payload.monitoring ? { monitoring: payload.monitoring } : {},
+    content_meta: buildContentMeta(payload.monitoring, payload.images),
   };
 }
 

@@ -7,6 +7,7 @@ import {
   CONTENT_TYPES,
   DIRECTIONAL_VIEWS,
   FOLLOW_UP_STATUSES,
+  IMAGE_PLACEMENTS,
   IMPORTANCE_LEVELS,
   NEWS_SORT_OPTIONS,
   PORTFOLIO_ASSET_TYPES,
@@ -307,6 +308,57 @@ const textField = z.preprocess(normalizeTrimmedText, z.string().min(1));
 const optionalTextField = z.preprocess(normalizeNullableText, z.string().optional());
 const commonIdField = z.preprocess(normalizeTrimmedText, z.string().min(1));
 
+const imageAttachmentSchema = z.object({
+  filename: z.preprocess(normalizeTrimmedText, z.string().min(1)),
+  contentType: z.preprocess(normalizeTrimmedText, z.string().min(1)),
+  caption: optionalTextField,
+  alt: optionalTextField,
+  order: z.preprocess(normalizeNumber, z.number().int().nonnegative().default(0)),
+  placement: z.preprocess(
+    (value) => normalizeEnumValue(value, { gallery: "gallery", inline: "inline" }, IMAGE_PLACEMENTS),
+    z.enum(IMAGE_PLACEMENTS).default("gallery"),
+  ),
+  anchorKey: optionalTextField,
+  bufferBase64: z.preprocess(normalizeTrimmedText, z.string().min(1)),
+});
+
+export type ImageIngestInput = z.infer<typeof imageAttachmentSchema>;
+
+const imageOperationSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("add"),
+    filename: z.preprocess(normalizeTrimmedText, z.string().min(1)),
+    contentType: z.preprocess(normalizeTrimmedText, z.string().min(1)),
+    caption: optionalTextField,
+    alt: optionalTextField,
+    order: z.preprocess(normalizeNumber, z.number().int().nonnegative().default(0)),
+    placement: z.preprocess(
+      (value) => normalizeEnumValue(value, { gallery: "gallery", inline: "inline" }, IMAGE_PLACEMENTS),
+      z.enum(IMAGE_PLACEMENTS).default("gallery"),
+    ),
+    anchorKey: optionalTextField,
+    bufferBase64: z.preprocess(normalizeTrimmedText, z.string().min(1)),
+  }),
+  z.object({
+    action: z.literal("update"),
+    imageId: z.preprocess(normalizeTrimmedText, z.string().min(1)),
+    caption: optionalTextField,
+    alt: optionalTextField,
+    order: z.preprocess(normalizeNumber, z.number().int().nonnegative().optional()),
+    placement: z.preprocess(
+      (value) => normalizeEnumValue(value, { gallery: "gallery", inline: "inline" }, IMAGE_PLACEMENTS),
+      z.enum(IMAGE_PLACEMENTS).optional(),
+    ),
+    anchorKey: optionalTextField,
+  }),
+  z.object({
+    action: z.literal("delete"),
+    imageId: z.preprocess(normalizeTrimmedText, z.string().min(1)),
+  }),
+]);
+
+export type ImageOperationInput = z.infer<typeof imageOperationSchema>;
+
 const scanSlotField = z.preprocess(
   (value) => normalizeEnumValue(value, scanSlotAliasMap, SCAN_SLOTS),
   z.enum(SCAN_SLOTS),
@@ -387,6 +439,8 @@ export const internalNewsIngestSchema = z.discriminatedUnion("operation", [
         nextCheckNote: optionalTextField,
       })
       .optional(),
+    images: z.array(imageAttachmentSchema).optional(),
+    imageOperations: z.array(imageOperationSchema).optional(),
   }),
   z.object({
     operation: z.literal("delete"),

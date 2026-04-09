@@ -7,6 +7,7 @@ import type {
   ContentType,
   DirectionalView,
   FollowUpStatus,
+  ImageAttachment,
   ImportanceLevel,
   NewsSortOption,
   PortfolioAssetType,
@@ -53,6 +54,7 @@ export type NewsMutationInput = {
     triggerCondition?: string;
     nextCheckNote?: string;
   };
+  images?: ImageAttachment[];
 };
 
 export type ThemeMutationInput = {

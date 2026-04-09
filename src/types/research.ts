@@ -63,6 +63,22 @@ export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
 export type NewsSortOption = (typeof NEWS_SORT_OPTIONS)[number];
 export type ContentType = (typeof CONTENT_TYPES)[number];
 
+export const IMAGE_PLACEMENTS = ["gallery", "inline"] as const;
+export type ImagePlacement = (typeof IMAGE_PLACEMENTS)[number];
+
+export type ImageAttachment = {
+  id: string;
+  storagePath: string;
+  url: string;
+  filename: string;
+  contentType: string;
+  caption?: string;
+  alt?: string;
+  order: number;
+  placement: ImagePlacement;
+  anchorKey?: string;
+};
+
 export type MonitoringMeta = {
   targetTickers?: string[];
   note?: string;
@@ -112,6 +128,7 @@ export type NewsItem = {
   followUpNote: string;
   importance: ImportanceLevel;
   monitoring?: MonitoringMeta;
+  images?: ImageAttachment[];
   createdAt: string;
   updatedAt: string;
 };

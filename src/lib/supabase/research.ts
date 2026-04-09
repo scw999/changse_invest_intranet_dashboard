@@ -41,7 +41,10 @@ type NewsRow = {
   follow_up_status: ResearchDataset["newsItems"][number]["followUpStatus"];
   follow_up_note: string;
   importance: ResearchDataset["newsItems"][number]["importance"];
-  content_meta: { monitoring?: ResearchDataset["newsItems"][number]["monitoring"] } | null;
+  content_meta: {
+    monitoring?: ResearchDataset["newsItems"][number]["monitoring"];
+    images?: ResearchDataset["newsItems"][number]["images"];
+  } | null;
   created_at: string;
   updated_at: string;
 };
@@ -211,6 +214,7 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
       followUpNote: row.follow_up_note,
       importance: row.importance,
       monitoring: row.content_meta?.monitoring,
+      images: row.content_meta?.images,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     })),

@@ -1,7 +1,7 @@
 "use client";
 
-import { startTransition, useEffect, useRef, useState } from "react";
-import { PencilLine, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { ImagePlus, PencilLine, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
 
 import { PageIntro } from "@/components/layout/page-intro";
 import {
@@ -32,12 +32,15 @@ import {
   CONTENT_TYPES,
   DIRECTIONAL_VIEWS,
   FOLLOW_UP_STATUSES,
+  IMAGE_PLACEMENTS,
   IMPORTANCE_LEVELS,
   REGIONS,
   SCAN_SLOTS,
   THEME_CATEGORIES,
   type ContentType,
   type FollowUpRecord,
+  type ImageAttachment,
+  type ImagePlacement,
   type NewsItem,
   type ResearchDataset,
   type Theme,
@@ -623,6 +626,17 @@ export function AdminPage() {
               </div>
             ) : null}
 
+            <ImageManager
+              newsItemId={editingNewsId}
+              images={editingNewsId ? newsItems.find((n) => n.id === editingNewsId)?.images ?? [] : []}
+              disabled={isSubmitting}
+              onMutationComplete={(dataset, message) => {
+                applyDataset(dataset, message);
+                setStatusMessage(message);
+              }}
+              onError={(message) => setErrorMessage(message)}
+            />
+
             <TagSelector
               label="영향 자산군"
               options={ASSET_CLASSES.map((entry) => ({
@@ -839,6 +853,14 @@ export function AdminPage() {
               <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
                 {getDisplayNewsItem(item).summary}
               </p>
+              {item.images && item.images.length > 0 ? (
+                <p className="mt-2 text-xs text-[var(--text-faint)]">
+                  이미지 {item.images.length}개
+                  {item.images.some((img) => img.placement === "inline")
+                    ? ` (인라인 ${item.images.filter((img) => img.placement === "inline").length})`
+                    : null}
+                </p>
+              ) : null}
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   type="button"
@@ -1027,6 +1049,315 @@ function FollowUpOpsRow({
           className="rounded-full bg-[var(--text-strong)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
         >
           저장
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const placementLabels: Record<ImagePlacement, string> = {
+  gallery: "갤러리",
+  inline: "인라인",
+};
+
+const ANCHOR_KEY_OPTIONS = [
+  { value: "", label: "(없음)" },
+  { value: "market-interpretation", label: "시장 해석" },
+  { value: "action-idea", label: "액션 아이디어" },
+  { value: "follow-up", label: "후속 메모" },
+  { value: "monitoring", label: "모니터링" },
+];
+
+function ImageManager({
+  newsItemId,
+  images,
+  disabled,
+  onMutationComplete,
+  onError,
+}: {
+  newsItemId: string | null;
+  images: ImageAttachment[];
+  disabled: boolean;
+  onMutationComplete: (dataset: ResearchDataset, message: string) => void;
+  onError: (message: string) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [editingImageId, setEditingImageId] = useState<string | null>(null);
+  const [editPlacement, setEditPlacement] = useState<ImagePlacement>("gallery");
+  const [editAnchorKey, setEditAnchorKey] = useState("");
+  const [editCaption, setEditCaption] = useState("");
+
+  const handleFileSelect = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (!newsItemId || !event.target.files?.length) return;
+
+      const file = event.target.files[0];
+      const reader = new FileReader();
+
+      reader.onload = async () => {
+        const base64Full = reader.result as string;
+        const base64Data = base64Full.split(",")[1];
+
+        setUploading(true);
+        try {
+          const response = await fetch("/api/private/admin/news/images", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              newsItemId,
+              images: [
+                {
+                  filename: file.name,
+                  contentType: file.type,
+                  caption: "",
+                  order: images.length,
+                  placement: "gallery",
+                  bufferBase64: base64Data,
+                },
+              ],
+            }),
+          });
+
+          if (!response.ok) {
+            const body = await response.json().catch(() => null);
+            throw new Error(
+              (body as { error?: string } | null)?.error ?? "이미지 업로드에 실패했습니다.",
+            );
+          }
+
+          const dataset = (await response.json()) as ResearchDataset;
+          onMutationComplete(dataset, "이미지를 업로드했습니다.");
+        } catch (error) {
+          onError(error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.");
+        } finally {
+          setUploading(false);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+        }
+      };
+
+      reader.readAsDataURL(file);
+    },
+    [newsItemId, images.length, onMutationComplete, onError],
+  );
+
+  const handleDelete = useCallback(
+    async (imageId: string) => {
+      if (!newsItemId) return;
+
+      setUploading(true);
+      try {
+        const response = await fetch("/api/private/admin/news/images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            newsItemId,
+            imageOperations: [{ action: "delete", imageId }],
+          }),
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          throw new Error(
+            (body as { error?: string } | null)?.error ?? "이미지 삭제에 실패했습니다.",
+          );
+        }
+
+        const dataset = (await response.json()) as ResearchDataset;
+        onMutationComplete(dataset, "이미지를 삭제했습니다.");
+      } catch (error) {
+        onError(error instanceof Error ? error.message : "이미지 삭제에 실패했습니다.");
+      } finally {
+        setUploading(false);
+      }
+    },
+    [newsItemId, onMutationComplete, onError],
+  );
+
+  const handleUpdatePlacement = useCallback(
+    async (imageId: string) => {
+      if (!newsItemId) return;
+
+      setUploading(true);
+      try {
+        const response = await fetch("/api/private/admin/news/images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            newsItemId,
+            imageOperations: [
+              {
+                action: "update",
+                imageId,
+                placement: editPlacement,
+                anchorKey: editPlacement === "inline" ? editAnchorKey : undefined,
+                caption: editCaption,
+              },
+            ],
+          }),
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          throw new Error(
+            (body as { error?: string } | null)?.error ?? "이미지 메타 수정에 실패했습니다.",
+          );
+        }
+
+        const dataset = (await response.json()) as ResearchDataset;
+        onMutationComplete(dataset, "이미지 배치를 수정했습니다.");
+        setEditingImageId(null);
+      } catch (error) {
+        onError(error instanceof Error ? error.message : "이미지 메타 수정에 실패했습니다.");
+      } finally {
+        setUploading(false);
+      }
+    },
+    [newsItemId, editPlacement, editAnchorKey, editCaption, onMutationComplete, onError],
+  );
+
+  const startEdit = (image: ImageAttachment) => {
+    setEditingImageId(image.id);
+    setEditPlacement(image.placement);
+    setEditAnchorKey(image.anchorKey ?? "");
+    setEditCaption(image.caption ?? "");
+  };
+
+  if (!newsItemId) {
+    return (
+      <div className="rounded-[22px] border border-dashed border-[var(--border-soft)] bg-[rgba(243,239,231,0.3)] p-4 text-center text-sm text-[var(--text-faint)]">
+        이미지를 관리하려면 먼저 기존 뉴스를 수정 모드로 열어주세요.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold tracking-[0.16em] text-[var(--text-faint)] uppercase">
+        첨부 이미지
+      </p>
+
+      {images.length > 0 ? (
+        <div className="space-y-2">
+          {images.map((image) => (
+            <div
+              key={image.id}
+              className="rounded-[18px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.72)] p-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-[var(--text-strong)]">
+                    {image.filename}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    {placementLabels[image.placement]}
+                    {image.placement === "inline" && image.anchorKey
+                      ? ` · ${image.anchorKey}`
+                      : null}
+                    {image.caption ? ` · ${image.caption}` : null}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={disabled || uploading}
+                    onClick={() => startEdit(image)}
+                    className="inline-flex items-center gap-1 rounded-full border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)] disabled:opacity-60"
+                  >
+                    <PencilLine className="h-3 w-3" />
+                    배치
+                  </button>
+                  <button
+                    type="button"
+                    disabled={disabled || uploading}
+                    onClick={() => void handleDelete(image.id)}
+                    className="inline-flex items-center gap-1 rounded-full border border-[rgba(140,45,45,0.2)] px-3 py-1.5 text-xs font-semibold text-[#8d2d2d] transition hover:bg-[rgba(140,45,45,0.06)] disabled:opacity-60"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+
+              {editingImageId === image.id ? (
+                <div className="mt-3 grid gap-3 rounded-[14px] border border-[var(--border-soft)] bg-[rgba(243,239,231,0.45)] p-3 md:grid-cols-[1fr_1fr_1fr_auto]">
+                  <Field label="배치 모드">
+                    <select
+                      value={editPlacement}
+                      onChange={(e) => setEditPlacement(e.target.value as ImagePlacement)}
+                      className="field"
+                    >
+                      {IMAGE_PLACEMENTS.map((p) => (
+                        <option key={p} value={p}>
+                          {placementLabels[p]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  {editPlacement === "inline" ? (
+                    <Field label="앵커 위치">
+                      <select
+                        value={editAnchorKey}
+                        onChange={(e) => setEditAnchorKey(e.target.value)}
+                        className="field"
+                      >
+                        {ANCHOR_KEY_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : null}
+                  <Field label="캡션">
+                    <input
+                      value={editCaption}
+                      onChange={(e) => setEditCaption(e.target.value)}
+                      className="field"
+                      placeholder="이미지 설명"
+                    />
+                  </Field>
+                  <div className="flex items-end gap-2">
+                    <button
+                      type="button"
+                      disabled={uploading}
+                      onClick={() => void handleUpdatePlacement(image.id)}
+                      className="rounded-full bg-[var(--text-strong)] px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                    >
+                      적용
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingImageId(null)}
+                      className="rounded-full border border-[var(--border-strong)] px-4 py-2 text-xs font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)]"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={(e) => void handleFileSelect(e)}
+          className="hidden"
+        />
+        <button
+          type="button"
+          disabled={disabled || uploading}
+          onClick={() => fileInputRef.current?.click()}
+          className="inline-flex items-center gap-2 rounded-full border border-dashed border-[var(--border-strong)] px-4 py-2.5 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)] disabled:opacity-60"
+        >
+          <ImagePlus className="h-4 w-4" />
+          {uploading ? "업로드 중..." : "이미지 추가"}
         </button>
       </div>
     </div>
