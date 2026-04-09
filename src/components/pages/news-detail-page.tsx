@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 
 import { PageIntro } from "@/components/layout/page-intro";
@@ -13,6 +14,7 @@ import {
 } from "@/components/research/research-badges";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { InlineImageGroup, NewsImageGallery } from "@/components/ui/news-image";
 import { RichText } from "@/components/ui/rich-text";
 import { SectionCard } from "@/components/ui/section-card";
 import { getDisplayNewsItem, getDisplayTheme } from "@/lib/content-kr";
@@ -20,6 +22,49 @@ import { buildArchiveHref, buildFollowUpHref } from "@/lib/navigation";
 import { groupById } from "@/lib/selectors";
 import { useResearchStore } from "@/lib/store/research-store";
 import { formatLongDate, formatPublishedAt } from "@/lib/utils";
+import type { ImageAttachment } from "@/types/research";
+
+const SECTION_ANCHOR_KEYS: Record<string, string[]> = {
+  "market-interpretation": ["market-interpretation", "시장해석", "market"],
+  "action-idea": ["action-idea", "액션아이디어", "action"],
+  "follow-up": ["follow-up", "후속메모", "followup"],
+  monitoring: ["monitoring", "모니터링"],
+};
+
+function classifyImages(images?: ImageAttachment[]) {
+  if (!images || images.length === 0) {
+    return { inlineBySection: new Map<string, ImageAttachment[]>(), galleryImages: [] };
+  }
+
+  const inlineBySection = new Map<string, ImageAttachment[]>();
+  const galleryImages: ImageAttachment[] = [];
+
+  for (const image of images) {
+    if (image.placement === "inline" && image.anchorKey) {
+      const normalizedKey = image.anchorKey.toLowerCase().replace(/[\s_]/g, "");
+      let matchedSection: string | null = null;
+
+      for (const [sectionKey, aliases] of Object.entries(SECTION_ANCHOR_KEYS)) {
+        if (aliases.includes(normalizedKey) || normalizedKey === sectionKey) {
+          matchedSection = sectionKey;
+          break;
+        }
+      }
+
+      if (!matchedSection) {
+        matchedSection = image.anchorKey;
+      }
+
+      const existing = inlineBySection.get(matchedSection) ?? [];
+      existing.push(image);
+      inlineBySection.set(matchedSection, existing);
+    } else {
+      galleryImages.push(image);
+    }
+  }
+
+  return { inlineBySection, galleryImages };
+}
 
 export function NewsDetailPage({ id }: { id: string }) {
   const newsItems = useResearchStore((state) => state.newsItems);
@@ -30,6 +75,11 @@ export function NewsDetailPage({ id }: { id: string }) {
   const themeMap = groupById(themes);
   const tickerMap = groupById(tickers);
   const followUp = followUps.find((entry) => entry.newsItemId === id);
+
+  const { inlineBySection, galleryImages } = useMemo(
+    () => classifyImages(item?.images),
+    [item?.images],
+  );
 
   if (!item) {
     return (
@@ -67,10 +117,7 @@ export function NewsDetailPage({ id }: { id: string }) {
         </div>
       </PageIntro>
 
-      <SectionCard
-        title="기본 정보"
-        description="카드에서는 요약만 보고, 상세에서는 해석과 액션, 후속 확인 포인트를 구조적으로 읽도록 구성했습니다."
-      >
+      <SectionCard title="기본 정보">
         <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[24px] border border-[var(--border-soft)] bg-[rgba(243,239,231,0.72)] p-5">
             <p className="text-xs font-semibold tracking-[0.18em] text-[var(--text-faint)] uppercase">
@@ -116,10 +163,7 @@ export function NewsDetailPage({ id }: { id: string }) {
       </SectionCard>
 
       {contentType === "monitoring" && item.monitoring ? (
-        <SectionCard
-          title="모니터링 포인트"
-          description="뉴스와 달리 추적 대상, 트리거 조건, 다음 확인 메모를 별도로 읽을 수 있게 분리했습니다."
-        >
+        <SectionCard title="모니터링 포인트">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-[22px] border border-[var(--border-soft)] bg-[rgba(229,239,236,0.58)] p-4">
               <p className="text-xs font-semibold tracking-[0.16em] text-[var(--text-faint)] uppercase">
@@ -148,19 +192,23 @@ export function NewsDetailPage({ id }: { id: string }) {
               </div>
             </div>
           </div>
+          <InlineImageGroup images={inlineBySection.get("monitoring") ?? []} />
         </SectionCard>
       ) : null}
 
-      <SectionCard title="시장 해석" description="긴 해석 메모도 markdown 스타일로 읽기 좋게 렌더링합니다.">
+      <SectionCard title="시장 해석">
         <RichText content={displayItem.marketInterpretation} />
+        <InlineImageGroup images={inlineBySection.get("market-interpretation") ?? []} />
       </SectionCard>
 
-      <SectionCard title="액션 아이디어" description="의견형 기록은 가설, 비중 판단, 실행 아이디어가 잘 읽히도록 간격을 넉넉히 둡니다.">
+      <SectionCard title="액션 아이디어">
         <RichText content={displayItem.actionIdea} />
+        <InlineImageGroup images={inlineBySection.get("action-idea") ?? []} />
       </SectionCard>
 
-      <SectionCard title="후속 메모" description="검증해야 할 항목과 follow-up 링크를 함께 확인할 수 있습니다.">
+      <SectionCard title="후속 메모">
         <RichText content={displayItem.followUpNote} />
+        <InlineImageGroup images={inlineBySection.get("follow-up") ?? []} />
         {followUp ? (
           <div className="mt-5">
             <Link
@@ -172,6 +220,12 @@ export function NewsDetailPage({ id }: { id: string }) {
           </div>
         ) : null}
       </SectionCard>
+
+      {galleryImages.length > 0 ? (
+        <SectionCard title="첨부 이미지">
+          <NewsImageGallery images={galleryImages} />
+        </SectionCard>
+      ) : null}
     </div>
   );
 }
