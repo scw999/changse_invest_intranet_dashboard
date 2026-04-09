@@ -24,6 +24,17 @@ type NaverPricePoint = {
   closePrice?: string;
 };
 
+type NasdaqHistoricalResponse = {
+  data?: {
+    tradesTable?: {
+      rows?: Array<{
+        date?: string;
+        close?: string;
+      }>;
+    };
+  } | null;
+};
+
 function normalizeSymbol(symbol: string) {
   return symbol.trim().toUpperCase();
 }
@@ -43,6 +54,27 @@ function toStooqSymbol(symbol: string) {
   }
 
   return `${normalized}.us`;
+}
+
+function toNumber(value: string | undefined) {
+  if (!value) {
+    return Number.NaN;
+  }
+
+  return Number(value.replaceAll(/[$,]/g, ""));
+}
+
+function toUsIsoDate(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const [month, day, year] = value.split("/").map((part) => Number(part));
+  if (![month, day, year].every((part) => Number.isFinite(part))) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function parseYahooChart(payload: YahooChartResponse): MarketHistoryPoint[] {
@@ -201,6 +233,68 @@ async function fetchNaverHistory(symbol: string): Promise<MarketHistoryPoint[]> 
   return history;
 }
 
+async function fetchNasdaqHistory(symbol: string): Promise<MarketHistoryPoint[]> {
+  const today = new Date();
+  const fromDate = new Date(today);
+  fromDate.setMonth(fromDate.getMonth() - 8);
+
+  const assetClasses = ['stocks', 'etf', 'index'];
+  const failures: string[] = [];
+
+  for (const assetClass of assetClasses) {
+    const url = new URL(`https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/historical`);
+    url.searchParams.set('assetclass', assetClass);
+    url.searchParams.set('fromdate', fromDate.toISOString().slice(0, 10));
+    url.searchParams.set('todate', today.toISOString().slice(0, 10));
+    url.searchParams.set('limit', '365');
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+          Accept: 'application/json,text/plain,*/*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          Referer: `https://www.nasdaq.com/market-activity/${assetClass}/${symbol.toLowerCase()}/historical`,
+          Origin: 'https://www.nasdaq.com',
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Nasdaq returned ${response.status}`);
+      }
+
+      const payload = (await response.json()) as NasdaqHistoricalResponse;
+      const rows = payload.data?.tradesTable?.rows ?? [];
+      const history = rows
+        .map((row) => {
+          const time = toUsIsoDate(row.date);
+          const value = toNumber(row.close);
+          if (!time || !Number.isFinite(value)) {
+            return null;
+          }
+
+          return { time, value } satisfies MarketHistoryPoint;
+        })
+        .filter((point): point is MarketHistoryPoint => point !== null)
+        .reverse()
+        .slice(-180);
+
+      if (history.length === 0) {
+        throw new Error(`Nasdaq returned no chart data for ${symbol}`);
+      }
+
+      return history;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${assetClass}: ${message}`);
+    }
+  }
+
+  throw new Error(`Nasdaq failed for ${symbol} (${failures.join('; ')})`);
+}
+
 async function fetchStooqHistory(symbol: string): Promise<MarketHistoryPoint[]> {
   const stooqSymbol = toStooqSymbol(symbol);
   const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSymbol)}&i=d`;
@@ -231,7 +325,7 @@ export async function fetchTickerHistory(symbol: string): Promise<MarketHistoryP
     { name: 'Yahoo Finance', fetcher: () => fetchYahooHistory(normalizedSymbol) },
     ...(isKoreanTicker(normalizedSymbol)
       ? [{ name: 'Naver Finance', fetcher: () => fetchNaverHistory(normalizedSymbol) }]
-      : []),
+      : [{ name: 'Nasdaq', fetcher: () => fetchNasdaqHistory(normalizedSymbol) }]),
     { name: 'Stooq', fetcher: () => fetchStooqHistory(normalizedSymbol) },
   ];
   const failures: string[] = [];
