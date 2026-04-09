@@ -3,6 +3,7 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { ImagePlus, PencilLine, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
 
+import { NewsImageManager } from "@/components/admin/news-image-manager";
 import { PageIntro } from "@/components/layout/page-intro";
 import {
   getDisplayFollowUp,
@@ -853,14 +854,27 @@ export function AdminPage() {
               <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
                 {getDisplayNewsItem(item).summary}
               </p>
-              {item.images && item.images.length > 0 ? (
-                <p className="mt-2 text-xs text-[var(--text-faint)]">
-                  이미지 {item.images.length}개
-                  {item.images.some((img) => img.placement === "inline")
-                    ? ` (인라인 ${item.images.filter((img) => img.placement === "inline").length})`
-                    : null}
-                </p>
-              ) : null}
+              <div className="mt-4">
+                <NewsImageManager
+                  newsItemId={item.id}
+                  images={item.images ?? []}
+                  // Read directly from the saved DB body so anchor suggestions
+                  // reflect the actual `{#id}` markers an editor just typed,
+                  // not whatever a hardcoded override layer happens to carry.
+                  articleBody={item.marketInterpretation}
+                  disabled={isSubmitting}
+                  onMutate={(body, message) =>
+                    runMutation(
+                      "/api/private/admin/news",
+                      {
+                        method: "PATCH",
+                        body: JSON.stringify(body),
+                      },
+                      message,
+                    )
+                  }
+                />
+              </div>
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   type="button"

@@ -143,6 +143,15 @@ Supabase SQL Editor에서 아래 파일을 실행합니다.
 1. [supabase/schema.sql](./supabase/schema.sql)
 2. [supabase/seed.sql](./supabase/seed.sql)
 
+### 1-1. 첨부 이미지 테이블과 스토리지 버킷
+
+아카이브/뉴스 첨부 이미지 기능을 사용하려면 아래 마이그레이션을 한 번 실행해 `news_item_images` 테이블과 `news-images` Supabase Storage 버킷을 생성합니다.
+
+1. [supabase/news-images-migration.sql](./supabase/news-images-migration.sql)
+2. [supabase/news-images-inline-placement-migration.sql](./supabase/news-images-inline-placement-migration.sql) — 본문 인라인 배치(`placement`, `anchor_key`) 컬럼 추가
+
+기존 텍스트 전용 뉴스와 갤러리 형식 첨부는 마이그레이션 후에도 변경 없이 동일하게 동작합니다. 인라인 배치 마이그레이션은 idempotent (`add column if not exists`) 라서 언제든 다시 실행해도 안전합니다.
+
 ### 2. 기존 프로젝트 하드닝
 
 이전에 public read 정책을 열어둔 프로젝트라면 아래 파일도 추가로 실행해야 합니다.
@@ -221,6 +230,8 @@ ASSISTANT_INGEST_TOKEN
 - `Telegram webhook` route for 창세봇 command ingestion
 
 창세봇 연동용 payload 예시와 권장 구조는 [docs/telegram-assistant-ingest.md](./docs/telegram-assistant-ingest.md)에 정리했습니다.
+
+아카이브/뉴스 첨부 이미지 운영 흐름과 ChangseBot/관리자 payload 예시는 [docs/news-image-attachments.md](./docs/news-image-attachments.md)에 정리했습니다.
 
 ## 참고
 

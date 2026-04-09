@@ -2,21 +2,32 @@ import { NextResponse } from "next/server";
 
 import { requireAdminRouteRequest } from "@/lib/auth/route";
 import { getViewer } from "@/lib/auth/session";
-import { buildContentMeta } from "@/lib/server/image-storage";
+import {
+  applyNewsImageOperations,
+  attachInitialNewsImages,
+} from "@/lib/server/news-images";
+import { fetchResearchDataset } from "@/lib/supabase/research";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import {
   buildFollowUpCopy,
   ensureMutationSuccess,
   resolveResearchOwnerId,
+  type NewsImageAttachmentInput,
+  type NewsImageOperationsInput,
   type NewsMutationInput,
 } from "@/lib/server/private-admin";
 import { fetchResearchDataset } from "@/lib/supabase/research";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import type { ImageAttachment } from "@/types/research";
 
+type AdminNewsRequestBody = Partial<NewsMutationInput> & {
+  id?: string;
+  images?: NewsImageAttachmentInput[];
+  imageOperations?: NewsImageOperationsInput;
+};
+
 async function readBody(request: Request) {
-  return (await request.json().catch(() => null)) as
-    | (Partial<NewsMutationInput> & { id?: string })
-    | null;
+  return (await request.json().catch(() => null)) as AdminNewsRequestBody | null;
 }
 
 function isNewsPayload(value: Partial<NewsMutationInput> | null): value is NewsMutationInput {
@@ -194,6 +205,10 @@ export async function POST(request: Request) {
     await syncNewsRelations(client, ownerId, data.id, body);
     await syncFollowUp(client, ownerId, data.id, body);
 
+    if (body.images && body.images.length > 0) {
+      await attachInitialNewsImages(client, ownerId, data.id, body.images);
+    }
+
     return respondWithDataset(client);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create news item.";
@@ -210,9 +225,19 @@ export async function PATCH(request: Request) {
   const viewer = await getViewer();
   const rawBody = await readBody(request);
   const newsId = rawBody?.id;
-  const body = rawBody as NewsMutationInput | null;
 
-  if (!viewer || !newsId || !isNewsPayload(body)) {
+  if (!viewer || !newsId) {
+    return NextResponse.json({ error: "Invalid news update payload." }, { status: 400 });
+  }
+
+  const hasImageOnlyChanges =
+    Boolean(rawBody?.imageOperations) ||
+    (Array.isArray(rawBody?.images) && rawBody!.images!.length > 0);
+
+  const body = rawBody as NewsMutationInput | null;
+  const isFullNewsUpdate = isNewsPayload(body);
+
+  if (!isFullNewsUpdate && !hasImageOnlyChanges) {
     return NextResponse.json({ error: "Invalid news update payload." }, { status: 400 });
   }
 
@@ -220,15 +245,25 @@ export async function PATCH(request: Request) {
   const ownerId = await resolveResearchOwnerId(client, viewer.id);
 
   try {
-    const { error } = await client
-      .from("news_items")
-      .update(toNewsRow(body))
-      .eq("owner_id", ownerId)
-      .eq("id", newsId);
-    ensureMutationSuccess(error, "Failed to update news item.");
+    if (isFullNewsUpdate) {
+      const { error } = await client
+        .from("news_items")
+        .update(toNewsRow(body!))
+        .eq("owner_id", ownerId)
+        .eq("id", newsId);
+      ensureMutationSuccess(error, "Failed to update news item.");
 
-    await syncNewsRelations(client, ownerId, newsId, body);
-    await syncFollowUp(client, ownerId, newsId, body);
+      await syncNewsRelations(client, ownerId, newsId, body!);
+      await syncFollowUp(client, ownerId, newsId, body!);
+    }
+
+    if (rawBody?.images && rawBody.images.length > 0) {
+      await attachInitialNewsImages(client, ownerId, newsId, rawBody.images);
+    }
+
+    if (rawBody?.imageOperations) {
+      await applyNewsImageOperations(client, ownerId, newsId, rawBody.imageOperations);
+    }
 
     return respondWithDataset(client);
   } catch (error) {

@@ -408,45 +408,146 @@ const newsSortField = z.preprocess(
   z.enum(NEWS_SORT_OPTIONS),
 );
 
-export const internalNewsIngestSchema = z.discriminatedUnion("operation", [
-  z.object({
-    operation: z.literal("upsert"),
-    id: commonIdField.optional(),
-    contentType: contentTypeField.default("news"),
-    title: textField,
-    summary: textField,
-    sourceName: textField,
-    sourceUrl: z.preprocess(normalizeTrimmedText, z.string().url()),
-    publishedAt: z.preprocess(normalizeTrimmedText, z.string().datetime({ offset: true })),
-    scanSlot: scanSlotField,
-    region: regionField,
-    affectedAssetClasses: assetClassArrayField,
-    relatedThemeIds: z.preprocess(normalizeStringArray, z.array(z.string()).default([])),
-    relatedTickerIds: z.preprocess(normalizeStringArray, z.array(z.string()).default([])),
-    marketInterpretation: textField,
-    directionalView: directionalViewField,
-    actionIdea: textField,
-    followUpStatus: followUpStatusField,
-    followUpNote: z.preprocess(normalizeTrimmedText, z.string()),
-    importance: importanceField,
-    monitoring: z
-      .object({
-        targetTickers: z.preprocess(normalizeStringArray, z.array(z.string()).optional()),
-        note: optionalTextField,
-        referencePrice: optionalTextField,
-        currentSnapshot: optionalTextField,
-        triggerCondition: optionalTextField,
-        nextCheckNote: optionalTextField,
-      })
-      .optional(),
-    images: z.array(imageAttachmentSchema).optional(),
-    imageOperations: z.array(imageOperationSchema).optional(),
-  }),
-  z.object({
-    operation: z.literal("delete"),
-    id: commonIdField,
-  }),
-]);
+const placementField = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const lower = value.trim().toLowerCase();
+  if (lower === "inline") return "inline";
+  if (lower === "gallery") return "gallery";
+  return value;
+}, z.enum(["gallery", "inline"]).optional());
+
+// Anchor keys flow through as plain optional strings here. The server-side
+// resolver in news-images.ts is the single point of truth for normalization
+// and validation, so we don't double-up the rules.
+const anchorKeyField = optionalTextField;
+
+const imageInputSchema = z.object({
+  filename: optionalTextField,
+  contentType: optionalTextField,
+  caption: optionalTextField,
+  alt: optionalTextField,
+  order: z.preprocess(normalizeNumber, z.number().int().optional()),
+  isCover: z.preprocess(normalizeBoolean, z.boolean().optional()),
+  bufferBase64: optionalTextField,
+  url: optionalTextField,
+  placement: placementField,
+  anchorKey: anchorKeyField,
+});
+
+const imageUpdateSchema = z.object({
+  imageId: commonIdField,
+  caption: optionalTextField,
+  alt: optionalTextField,
+  order: z.preprocess(normalizeNumber, z.number().int().optional()),
+  isCover: z.preprocess(normalizeBoolean, z.boolean().optional()),
+  placement: placementField,
+  // Allow explicit null so admins can clear an anchor key.
+  anchorKey: z.preprocess((value) => {
+    if (value === null) return null;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed ? trimmed : null;
+    }
+    return value;
+  }, z.union([z.string(), z.null()]).optional()),
+});
+
+const imageReorderSchema = z.object({
+  imageId: commonIdField,
+  order: z.preprocess(normalizeNumber, z.number().int()),
+});
+
+const imageOperationsSchema = z
+  .object({
+    add: z.array(imageInputSchema).optional(),
+    update: z.array(imageUpdateSchema).optional(),
+    reorder: z.array(imageReorderSchema).optional(),
+    delete: z.preprocess(normalizeStringArray, z.array(z.string()).optional()),
+    replaceAll: z.preprocess(normalizeBoolean, z.boolean().optional()),
+  })
+  .optional();
+
+const upsertNewsBaseSchema = z.object({
+  operation: z.literal("upsert"),
+  id: commonIdField.optional(),
+  contentType: contentTypeField.default("news"),
+  title: textField.optional(),
+  summary: textField.optional(),
+  sourceName: textField.optional(),
+  sourceUrl: z.preprocess(normalizeTrimmedText, z.string().url()).optional(),
+  publishedAt: z
+    .preprocess(normalizeTrimmedText, z.string().datetime({ offset: true }))
+    .optional(),
+  scanSlot: scanSlotField.optional(),
+  region: regionField.optional(),
+  affectedAssetClasses: assetClassArrayField.optional(),
+  relatedThemeIds: z.preprocess(normalizeStringArray, z.array(z.string()).default([])),
+  relatedTickerIds: z.preprocess(normalizeStringArray, z.array(z.string()).default([])),
+  marketInterpretation: textField.optional(),
+  directionalView: directionalViewField.optional(),
+  actionIdea: textField.optional(),
+  followUpStatus: followUpStatusField.optional(),
+  followUpNote: z.preprocess(normalizeTrimmedText, z.string()).optional(),
+  importance: importanceField.optional(),
+  monitoring: z
+    .object({
+      targetTickers: z.preprocess(normalizeStringArray, z.array(z.string()).optional()),
+      note: optionalTextField,
+      referencePrice: optionalTextField,
+      currentSnapshot: optionalTextField,
+      triggerCondition: optionalTextField,
+      nextCheckNote: optionalTextField,
+    })
+    .optional(),
+  images: z.array(imageInputSchema).optional(),
+  imageOperations: imageOperationsSchema,
+});
+
+const REQUIRED_NEWS_CREATE_FIELDS = [
+  "title",
+  "summary",
+  "sourceName",
+  "sourceUrl",
+  "publishedAt",
+  "scanSlot",
+  "region",
+  "affectedAssetClasses",
+  "marketInterpretation",
+  "directionalView",
+  "actionIdea",
+  "followUpStatus",
+  "importance",
+] as const;
+
+const upsertNewsSchema = upsertNewsBaseSchema.superRefine((value, ctx) => {
+  if (value.id) {
+    return;
+  }
+
+  for (const field of REQUIRED_NEWS_CREATE_FIELDS) {
+    const candidate = (value as Record<string, unknown>)[field];
+    const isMissing =
+      candidate === undefined ||
+      candidate === null ||
+      (typeof candidate === "string" && candidate.trim().length === 0) ||
+      (Array.isArray(candidate) && candidate.length === 0);
+
+    if (isMissing) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [field],
+        message: `${field} is required when creating a news item.`,
+      });
+    }
+  }
+});
+
+const deleteNewsSchema = z.object({
+  operation: z.literal("delete"),
+  id: commonIdField,
+});
+
+export const internalNewsIngestSchema = z.union([upsertNewsSchema, deleteNewsSchema]);
 
 export const internalFollowUpIngestSchema = z.object({
   newsItemId: commonIdField,

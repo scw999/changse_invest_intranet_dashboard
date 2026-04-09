@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 
 import { PageIntro } from "@/components/layout/page-intro";
+import { ArticleImage } from "@/components/research/article-image";
 import {
   ContentTypeBadge,
   DirectionBadge,
@@ -17,104 +18,16 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { InlineImageGroup, NewsImageGallery } from "@/components/ui/news-image";
 import { RichText } from "@/components/ui/rich-text";
 import { SectionCard } from "@/components/ui/section-card";
+import {
+  PREAMBLE_ANCHOR_KEY,
+  parseArticleSections,
+} from "@/lib/article-anchors";
 import { getDisplayNewsItem, getDisplayTheme } from "@/lib/content-kr";
 import { buildArchiveHref, buildFollowUpHref } from "@/lib/navigation";
 import { groupById } from "@/lib/selectors";
 import { useResearchStore } from "@/lib/store/research-store";
 import { formatLongDate, formatPublishedAt } from "@/lib/utils";
-import type { ImageAttachment } from "@/types/research";
-
-const SECTION_ANCHOR_KEYS: Record<string, string[]> = {
-  "market-interpretation": ["market-interpretation", "시장해석", "market"],
-  "action-idea": ["action-idea", "액션아이디어", "action"],
-  "follow-up": ["follow-up", "후속메모", "followup"],
-  monitoring: ["monitoring", "모니터링"],
-};
-
-const ANCHORED_HEADING_RE = /^(#{2,6})\s+(.+?)\s*\{#([a-zA-Z0-9_-]+)\}\s*$/;
-
-type AnchoredMarkdownBlock = {
-  anchorKey?: string;
-  markdown: string;
-};
-
-function normalizeAnchorKey(value: string) {
-  return value.toLowerCase().trim().replace(/[\s_]/g, "-");
-}
-
-function parseAnchoredMarkdownBlocks(content?: string | null): AnchoredMarkdownBlock[] {
-  if (!content || !content.trim()) {
-    return [];
-  }
-
-  const lines = content.split(/\r?\n/);
-  const blocks: AnchoredMarkdownBlock[] = [];
-  let currentAnchorKey: string | undefined;
-  let currentLines: string[] = [];
-
-  const pushBlock = () => {
-    const markdown = currentLines.join("\n").trim();
-    if (!markdown) return;
-    blocks.push({ anchorKey: currentAnchorKey, markdown });
-  };
-
-  for (const line of lines) {
-    const match = line.match(ANCHORED_HEADING_RE);
-    if (match) {
-      pushBlock();
-      currentAnchorKey = normalizeAnchorKey(match[3]);
-      currentLines = [`${match[1]} ${match[2]}`];
-      continue;
-    }
-
-    currentLines.push(line);
-  }
-
-  pushBlock();
-  return blocks;
-}
-
-function classifyImages(images?: ImageAttachment[]) {
-  if (!images || images.length === 0) {
-    return {
-      inlineBySection: new Map<string, ImageAttachment[]>(),
-      inlineByAnchor: new Map<string, ImageAttachment[]>(),
-      galleryImages: [] as ImageAttachment[],
-    };
-  }
-
-  const inlineBySection = new Map<string, ImageAttachment[]>();
-  const inlineByAnchor = new Map<string, ImageAttachment[]>();
-  const galleryImages: ImageAttachment[] = [];
-
-  for (const image of images) {
-    if (image.placement === "inline" && image.anchorKey) {
-      const normalizedKey = normalizeAnchorKey(image.anchorKey);
-      let matchedSection: string | null = null;
-
-      for (const [sectionKey, aliases] of Object.entries(SECTION_ANCHOR_KEYS)) {
-        if (aliases.includes(normalizedKey) || normalizedKey === sectionKey) {
-          matchedSection = sectionKey;
-          break;
-        }
-      }
-
-      if (matchedSection) {
-        const existing = inlineBySection.get(matchedSection) ?? [];
-        existing.push(image);
-        inlineBySection.set(matchedSection, existing);
-      } else {
-        const existing = inlineByAnchor.get(normalizedKey) ?? [];
-        existing.push(image);
-        inlineByAnchor.set(normalizedKey, existing);
-      }
-    } else {
-      galleryImages.push(image);
-    }
-  }
-
-  return { inlineBySection, inlineByAnchor, galleryImages };
-}
+import type { NewsItemImage } from "@/types/research";
 
 export function NewsDetailPage({ id }: { id: string }) {
   const newsItems = useResearchStore((state) => state.newsItems);
@@ -138,33 +51,115 @@ export function NewsDetailPage({ id }: { id: string }) {
   const displayItem = getDisplayNewsItem(item);
   const contentType = item.contentType ?? "news";
 
-  const { inlineBySection, inlineByAnchor, galleryImages } = useMemo(
-    () => classifyImages(item.images),
-    [item.images],
-  );
+  // The project's React Compiler memoizes plain const computations
+  // automatically, so manual useMemo is unnecessary here.
+  const allImages: NewsItemImage[] = item.images
+    ? [...item.images].sort((a, b) => a.order - b.order)
+    : [];
 
-  const marketInterpretationBlocks = useMemo(
-    () => parseAnchoredMarkdownBlocks(displayItem.marketInterpretation),
-    [displayItem.marketInterpretation],
-  );
+  // The renderer must parse anchors from the *actual* saved body, not from a
+  // display-layer copy. `getDisplayNewsItem` historically merged hardcoded
+  // Korean translations on top of legacy seed ids — if those overrides ever
+  // win for `marketInterpretation`, the body the parser sees has no
+  // `{#anchor-id}` markers and every inline image silently falls into the
+  // bottom gallery. Reading from `item.marketInterpretation` directly closes
+  // that loophole and matches the contract: the rendering pipeline parses the
+  // article content that was actually saved.
+  const articleBody = item.marketInterpretation ?? "";
 
-  const matchedMarketAnchors = useMemo(() => {
-    const anchors = new Set<string>();
-    for (const block of marketInterpretationBlocks) {
-      if (block.anchorKey && inlineByAnchor.has(block.anchorKey)) {
-        anchors.add(block.anchorKey);
+  // Single deterministic pass over the article body. parseArticleSections is
+  // a cheap line scan; the compiler keeps it from re-running on unrelated
+  // re-renders.
+  const { sections, anchors } = parseArticleSections(articleBody);
+
+  // ---------------------------------------------------------------------------
+  // Image → section resolution.
+  //
+  // The strategy adapts to the article's structure:
+  //
+  // A) Body has explicit `{#id}` anchored subsections:
+  //    Tier 1 – image.anchorKey matches an anchor → inline.
+  //    Tier 2 – images with NO anchorKey → auto-distribute to unclaimed
+  //             anchors by order.
+  //    Tier 3 – everything else → gallery.
+  //
+  // B) Body has plain-heading (synthetic `__heading-N__`) subsections:
+  //    ALL images distributed to heading sections by order.
+  //    Overflow → gallery.
+  //
+  // C) Body has NO subsections at all (preamble only):
+  //    ALL images render inline after the preamble text, inside the
+  //    "시장 해석" section. Nothing goes to the gallery. This is the
+  //    most common real-world case: the assistant produces a flat
+  //    paragraph and attaches images.
+  // ---------------------------------------------------------------------------
+  const hasSyntheticAnchors =
+    anchors.length > 0 && anchors[0].anchorKey.startsWith("__heading-");
+  const isPreambleOnly =
+    anchors.length === 0 && sections.length === 1 && sections[0].anchorKey === PREAMBLE_ANCHOR_KEY;
+
+  const validAnchorKeys = new Set(anchors.map((anchor) => anchor.anchorKey));
+  const inlineImagesByAnchor = new Map<string, NewsItemImage[]>();
+  const galleryImages: NewsItemImage[] = [];
+
+  if (isPreambleOnly && allImages.length > 0) {
+    // Case C: flat body, no headings. Render all images inline after the
+    // preamble text inside "시장 해석".
+    inlineImagesByAnchor.set(PREAMBLE_ANCHOR_KEY, allImages);
+  } else if (hasSyntheticAnchors) {
+    // Case B: body has plain headings, no {#id} markers.
+    const sectionKeys = anchors.map((a) => a.anchorKey);
+    const matchCount = Math.min(sectionKeys.length, allImages.length);
+    for (let i = 0; i < matchCount; i++) {
+      inlineImagesByAnchor.set(sectionKeys[i], [allImages[i]]);
+    }
+    for (let i = matchCount; i < allImages.length; i++) {
+      galleryImages.push(allImages[i]);
+    }
+  } else {
+    // Case A: body has explicit {#id} anchors.
+    const unmatchedImages: NewsItemImage[] = [];
+
+    // Tier 1: explicit anchorKey match (regardless of `placement` field).
+    for (const image of allImages) {
+      if (image.anchorKey && validAnchorKeys.has(image.anchorKey)) {
+        const bucket = inlineImagesByAnchor.get(image.anchorKey) ?? [];
+        bucket.push(image);
+        inlineImagesByAnchor.set(image.anchorKey, bucket);
+      } else {
+        unmatchedImages.push(image);
       }
     }
-    return anchors;
-  }, [inlineByAnchor, marketInterpretationBlocks]);
 
-  const galleryFallbackImages = useMemo(() => {
-    const unmatchedInlineImages = Array.from(inlineByAnchor.entries())
-      .filter(([anchorKey]) => !matchedMarketAnchors.has(anchorKey))
-      .flatMap(([, images]) => images);
+    // Tier 2: auto-match remaining images to unclaimed anchors by order.
+    const unclaimedAnchorKeys = anchors
+      .map((a) => a.anchorKey)
+      .filter((key) => !inlineImagesByAnchor.has(key));
 
-    return [...galleryImages, ...unmatchedInlineImages].sort((a, b) => a.order - b.order);
-  }, [galleryImages, inlineByAnchor, matchedMarketAnchors]);
+    const autoEligible: NewsItemImage[] = [];
+
+    for (const image of unmatchedImages) {
+      if (!image.anchorKey) {
+        autoEligible.push(image);
+      } else {
+        galleryImages.push(image);
+      }
+    }
+
+    if (unclaimedAnchorKeys.length > 0 && autoEligible.length > 0) {
+      const autoMatchCount = Math.min(unclaimedAnchorKeys.length, autoEligible.length);
+      for (let i = 0; i < autoMatchCount; i++) {
+        const bucket = inlineImagesByAnchor.get(unclaimedAnchorKeys[i]) ?? [];
+        bucket.push(autoEligible[i]);
+        inlineImagesByAnchor.set(unclaimedAnchorKeys[i], bucket);
+      }
+      for (let i = autoMatchCount; i < autoEligible.length; i++) {
+        galleryImages.push(autoEligible[i]);
+      }
+    } else {
+      galleryImages.push(...autoEligible);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -269,25 +264,66 @@ export function NewsDetailPage({ id }: { id: string }) {
         </SectionCard>
       ) : null}
 
-      <SectionCard title="시장 해석">
-        {marketInterpretationBlocks.length > 0 ? (
-          <div className="space-y-6">
-            {marketInterpretationBlocks.map((block, index) => (
-              <div key={`${block.anchorKey ?? "block"}-${index}`} className="space-y-4">
-                <RichText content={block.markdown} />
-                {block.anchorKey ? (
-                  <InlineImageGroup images={inlineByAnchor.get(block.anchorKey) ?? []} />
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <RichText content={displayItem.marketInterpretation} />
-        )}
-        <InlineImageGroup images={inlineBySection.get("market-interpretation") ?? []} />
+      <SectionCard title="시장 해석" description="긴 해석 메모도 markdown 스타일로 읽기 좋게 렌더링합니다.">
+        <div
+          className="space-y-4"
+          data-anchor-count={anchors.length}
+          data-total-images={allImages.length}
+          data-inline-count={allImages.length - galleryImages.length}
+          data-gallery-count={galleryImages.length}
+        >
+          {sections.map((section, idx) => {
+            const isPreamble = section.anchorKey === PREAMBLE_ANCHOR_KEY;
+            const inlineImages = inlineImagesByAnchor.get(section.anchorKey) ?? [];
+
+            // Anchored subsections get a real HTML `<section id>` so the URL
+            // hash can deep-link to them (e.g. /archive/abc#samsung-valuation)
+            // and so anyone inspecting the DOM can verify which image is
+            // pinned to which anchor via the `data-anchor-key` attribute.
+            return (
+              <section
+                key={`${section.anchorKey}-${idx}`}
+                id={isPreamble ? undefined : section.anchorKey}
+                data-anchor-key={isPreamble ? undefined : section.anchorKey}
+                className="scroll-mt-24"
+              >
+                <RichText content={section.content} />
+                {inlineImages.map((image) => (
+                  <div
+                    key={image.id}
+                    data-image-anchor={section.anchorKey}
+                    data-image-id={image.id}
+                  >
+                    <ArticleImage image={image} fallbackAlt={displayItem.title} inline />
+                  </div>
+                ))}
+              </section>
+            );
+          })}
+        </div>
       </SectionCard>
 
-      <SectionCard title="액션 아이디어">
+      {galleryImages.length > 0 ? (
+        <SectionCard
+          title="첨부 이미지"
+          description="본문 인라인 위치가 지정되지 않은 첨부 이미지를 갤러리 형태로 모아 보여줍니다."
+        >
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {galleryImages.map((image) => (
+              <li
+                key={image.id}
+                data-image-id={image.id}
+                data-image-placement={image.placement}
+                data-image-anchor={image.anchorKey ?? "none"}
+              >
+                <ArticleImage image={image} fallbackAlt={displayItem.title} />
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      ) : null}
+
+      <SectionCard title="액션 아이디어" description="의견형 기록은 가설, 비중 판단, 실행 아이디어가 잘 읽히도록 간격을 넉넉히 둡니다.">
         <RichText content={displayItem.actionIdea} />
         <InlineImageGroup images={inlineBySection.get("action-idea") ?? []} />
       </SectionCard>
