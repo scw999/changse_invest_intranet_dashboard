@@ -21,6 +21,7 @@ import {
 } from "@/lib/server/private-admin";
 import { fetchResearchDataset } from "@/lib/supabase/research";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import type { ImageAttachment } from "@/types/research";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ function toFullNewsRow(payload: NewsMutationInput) {
     follow_up_status: payload.followUpStatus,
     follow_up_note: payload.followUpNote.trim(),
     importance: payload.importance,
-    content_meta: payload.monitoring ? { monitoring: payload.monitoring } : {},
+    content_meta: buildContentMeta(payload.monitoring, images),
   };
 }
 

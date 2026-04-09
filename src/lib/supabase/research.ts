@@ -41,7 +41,10 @@ type NewsRow = {
   follow_up_status: ResearchDataset["newsItems"][number]["followUpStatus"];
   follow_up_note: string;
   importance: ResearchDataset["newsItems"][number]["importance"];
-  content_meta: { monitoring?: ResearchDataset["newsItems"][number]["monitoring"] } | null;
+  content_meta: {
+    monitoring?: ResearchDataset["newsItems"][number]["monitoring"];
+    images?: ResearchDataset["newsItems"][number]["images"];
+  } | null;
   created_at: string;
   updated_at: string;
 };

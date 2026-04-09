@@ -7,6 +7,7 @@ import type {
   ContentType,
   DirectionalView,
   FollowUpStatus,
+  ImageAttachment,
   ImportanceLevel,
   NewsSortOption,
   PortfolioAssetType,
