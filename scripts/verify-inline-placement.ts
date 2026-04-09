@@ -46,29 +46,75 @@ type RenderStep =
   | { kind: "image"; id: string; caption?: string };
 
 /**
- * Re-implements the exact grouping logic in
+ * Re-implements the exact three-tier grouping logic in
  * `src/components/pages/news-detail-page.tsx`, then walks the sections in
  * document order and emits a flat "render plan" we can assert against.
+ *
+ * Tier 1: explicit anchorKey match (regardless of `placement` field)
+ * Tier 2: auto-match remaining images to unclaimed anchors by order
+ * Tier 3: gallery fallback
  */
 function planRender(body: string, images: FixtureImage[]) {
   const sorted = [...images].sort((a, b) => a.order - b.order);
   const { sections, anchors } = parseArticleSections(body);
-  const validAnchorKeys = new Set(anchors.map((a) => a.anchorKey));
+
+  const hasSyntheticAnchors =
+    anchors.length > 0 && anchors[0].anchorKey.startsWith("__heading-");
 
   const inlineByAnchor = new Map<string, FixtureImage[]>();
   const gallery: FixtureImage[] = [];
 
-  for (const image of sorted) {
-    if (
-      image.placement === "inline" &&
-      image.anchorKey &&
-      validAnchorKeys.has(image.anchorKey)
-    ) {
-      const arr = inlineByAnchor.get(image.anchorKey) ?? [];
-      arr.push(image);
-      inlineByAnchor.set(image.anchorKey, arr);
+  if (hasSyntheticAnchors) {
+    // Fallback mode: body has plain headings, no {#id} markers.
+    // Distribute ALL images to heading sections by display order.
+    const sectionKeys = anchors.map((a) => a.anchorKey);
+    const matchCount = Math.min(sectionKeys.length, sorted.length);
+    for (let i = 0; i < matchCount; i++) {
+      inlineByAnchor.set(sectionKeys[i], [sorted[i]]);
+    }
+    for (let i = matchCount; i < sorted.length; i++) {
+      gallery.push(sorted[i]);
+    }
+  } else {
+    // Normal mode: body has explicit {#id} anchors.
+    const validAnchorKeys = new Set(anchors.map((a) => a.anchorKey));
+    const unmatchedImages: FixtureImage[] = [];
+
+    for (const image of sorted) {
+      if (image.anchorKey && validAnchorKeys.has(image.anchorKey)) {
+        const arr = inlineByAnchor.get(image.anchorKey) ?? [];
+        arr.push(image);
+        inlineByAnchor.set(image.anchorKey, arr);
+      } else {
+        unmatchedImages.push(image);
+      }
+    }
+
+    const unclaimedAnchorKeys = anchors
+      .map((a) => a.anchorKey)
+      .filter((key) => !inlineByAnchor.has(key));
+
+    const autoEligible: FixtureImage[] = [];
+    for (const image of unmatchedImages) {
+      if (!image.anchorKey) {
+        autoEligible.push(image);
+      } else {
+        gallery.push(image);
+      }
+    }
+
+    if (unclaimedAnchorKeys.length > 0 && autoEligible.length > 0) {
+      const autoMatchCount = Math.min(unclaimedAnchorKeys.length, autoEligible.length);
+      for (let i = 0; i < autoMatchCount; i++) {
+        const bucket = inlineByAnchor.get(unclaimedAnchorKeys[i]) ?? [];
+        bucket.push(autoEligible[i]);
+        inlineByAnchor.set(unclaimedAnchorKeys[i], bucket);
+      }
+      for (let i = autoMatchCount; i < autoEligible.length; i++) {
+        gallery.push(autoEligible[i]);
+      }
     } else {
-      gallery.push(image);
+      gallery.push(...autoEligible);
     }
   }
 
@@ -331,22 +377,20 @@ const images3: FixtureImage[] = [
 
 const result3 = planRender(body3, images3);
 
-check("valid inline image still renders after its subsection", () => {
+check("Tier-1: ok→alpha inline, Tier-2: no-anchor→beta auto-matched", () => {
   const planKeys = result3.plan
     .filter((step) => step.kind === "image")
     .map((step) => (step as Extract<RenderStep, { kind: "image" }>).id);
-  assert.deepEqual(planKeys, ["ok"]);
+  // "ok" matched alpha via Tier 1. "no-anchor" (no anchorKey) auto-matched
+  // to the unclaimed "beta" via Tier 2.
+  assert.deepEqual(planKeys, ["ok", "no-anchor"]);
 });
 
-check("broken anchor → gallery fallback (not dropped)", () => {
+check("broken anchor → gallery fallback (not silently relocated)", () => {
   assert.ok(result3.gallery.find((img) => img.id === "ghost"));
 });
 
-check("inline with no anchorKey → gallery fallback (not dropped)", () => {
-  assert.ok(result3.gallery.find((img) => img.id === "no-anchor"));
-});
-
-check("explicit gallery image stays in gallery", () => {
+check("overflow gallery image stays in gallery", () => {
   assert.ok(result3.gallery.find((img) => img.id === "plain"));
 });
 
@@ -427,7 +471,231 @@ check("extractArticleAnchors is identity-equivalent to parser.anchors", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Fixture 7: getDisplayNewsItem must NOT clobber a body that contains anchors
+// Fixture 7a: Tier-1 relaxed matching — anchorKey alone (placement ignored)
+// ---------------------------------------------------------------------------
+
+banner("Fixture 7a: Tier-1 relaxed matching (anchorKey alone)");
+
+const body7a = body1; // reuse the three-subsection body
+const images7a: FixtureImage[] = [
+  // All images have placement:"gallery" but valid anchorKeys.
+  // Previously these would ALL go to gallery. Now Tier-1 matches them.
+  { id: "s", placement: "gallery", anchorKey: "samsung-valuation", order: 1 },
+  { id: "p", placement: "gallery", anchorKey: "private-credit-risk", order: 2 },
+  { id: "t", placement: "gallery", anchorKey: "trump-48h", order: 3 },
+];
+
+const result7a = planRender(body7a, images7a);
+
+check("images with anchorKey match even when placement is gallery", () => {
+  const imageSteps = result7a.plan.filter((s) => s.kind === "image");
+  assert.equal(imageSteps.length, 3);
+});
+
+check("gallery is empty after Tier-1 anchorKey matching", () => {
+  assert.deepEqual(result7a.gallery, []);
+});
+
+check("render order matches subsection document order (Tier-1)", () => {
+  const flat: string[] = [];
+  let currentSection = "";
+  for (const step of result7a.plan) {
+    if (step.kind === "section") {
+      currentSection = step.anchorKey;
+    } else {
+      flat.push(`${step.id}@${currentSection}`);
+    }
+  }
+  assert.deepEqual(flat, [
+    "s@samsung-valuation",
+    "p@private-credit-risk",
+    "t@trump-48h",
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// Fixture 7b: Tier-2 auto-match by order (no anchorKey at all)
+// ---------------------------------------------------------------------------
+
+banner("Fixture 7b: Tier-2 auto-match by order");
+
+const body7b = body1; // three anchored subsections
+const images7b: FixtureImage[] = [
+  // No anchorKey, no inline placement — pure gallery images.
+  // Tier 2 should auto-match them to anchors in display_order.
+  { id: "img1", placement: "gallery", order: 1 },
+  { id: "img2", placement: "gallery", order: 2 },
+  { id: "img3", placement: "gallery", order: 3 },
+];
+
+const result7b = planRender(body7b, images7b);
+
+check("3 images auto-matched to 3 anchors by order", () => {
+  const imageSteps = result7b.plan.filter((s) => s.kind === "image");
+  assert.equal(imageSteps.length, 3);
+});
+
+check("gallery is empty after Tier-2 auto-match", () => {
+  assert.deepEqual(result7b.gallery, []);
+});
+
+check("auto-match order: img1→samsung, img2→private-credit, img3→trump", () => {
+  const flat: string[] = [];
+  let currentSection = "";
+  for (const step of result7b.plan) {
+    if (step.kind === "section") {
+      currentSection = step.anchorKey;
+    } else {
+      flat.push(`${step.id}@${currentSection}`);
+    }
+  }
+  assert.deepEqual(flat, [
+    "img1@samsung-valuation",
+    "img2@private-credit-risk",
+    "img3@trump-48h",
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// Fixture 7c: Mixed tiers — Tier-1 + Tier-2 + gallery fallback
+// ---------------------------------------------------------------------------
+
+banner("Fixture 7c: mixed tiers (Tier-1 + Tier-2 + gallery)");
+
+const body7c = body1; // three anchors
+const images7c: FixtureImage[] = [
+  // Tier 1: explicit anchorKey for samsung
+  { id: "explicit", placement: "gallery", anchorKey: "samsung-valuation", order: 1 },
+  // Tier 2: no anchorKey, should auto-match to first unclaimed = private-credit-risk
+  { id: "auto1", placement: "gallery", order: 2 },
+  // Tier 2: should auto-match to next unclaimed = trump-48h
+  { id: "auto2", placement: "gallery", order: 3 },
+  // Tier 3: more images than anchors → gallery
+  { id: "overflow", placement: "gallery", order: 4 },
+];
+
+const result7c = planRender(body7c, images7c);
+
+check("3 images inline, 1 in gallery (overflow)", () => {
+  const inlineCount = result7c.plan.filter((s) => s.kind === "image").length;
+  assert.equal(inlineCount, 3);
+  assert.equal(result7c.gallery.length, 1);
+  assert.equal(result7c.gallery[0].id, "overflow");
+});
+
+check("render plan: explicit→samsung, auto1→private-credit, auto2→trump", () => {
+  const flat: string[] = [];
+  let currentSection = "";
+  for (const step of result7c.plan) {
+    if (step.kind === "section") {
+      currentSection = step.anchorKey;
+    } else {
+      flat.push(`${step.id}@${currentSection}`);
+    }
+  }
+  assert.deepEqual(flat, [
+    "explicit@samsung-valuation",
+    "auto1@private-credit-risk",
+    "auto2@trump-48h",
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// Fixture 9: PLAIN HEADINGS (no {#id} markers at all)
+//
+// This is the critical real-world scenario: the article body has standard
+// markdown headings like `### 삼성전자 저평가 논점` WITHOUT any `{#id}`
+// anchor syntax. The parser falls back to splitting on plain headings and
+// generating synthetic anchor keys. The renderer distributes ALL images to
+// heading sections by display order.
+// ---------------------------------------------------------------------------
+
+banner("Fixture 9: plain headings (no {#id} markers)");
+
+const body9 = `## 상단 요약
+핵심 내용
+
+### 삼성전자 저평가 논점
+삼성전자 관련 본문 A
+
+### 사모대출 불안
+사모대출 관련 본문 B
+
+### 트럼프 48시간 발언
+트럼프 관련 본문 C`;
+
+const images9: FixtureImage[] = [
+  { id: "samsung", placement: "inline", anchorKey: "samsung-valuation", order: 1 },
+  { id: "private-credit", placement: "gallery", anchorKey: "private-credit-risk", order: 2 },
+  { id: "trump", placement: "gallery", order: 3 },
+];
+
+const result9 = planRender(body9, images9);
+
+check("parser detects 4 plain headings (## + 3x ###) as synthetic anchors", () => {
+  assert.equal(result9.anchors.length, 4);
+  assert.ok(result9.anchors[0].anchorKey.startsWith("__heading-"));
+  assert.equal(result9.anchors[0].heading, "상단 요약");
+  assert.equal(result9.anchors[1].heading, "삼성전자 저평가 논점");
+  assert.equal(result9.anchors[2].heading, "사모대출 불안");
+  assert.equal(result9.anchors[3].heading, "트럼프 48시간 발언");
+});
+
+check("all 3 images render inline under plain-heading sections", () => {
+  const imageSteps = result9.plan.filter((s) => s.kind === "image");
+  assert.equal(imageSteps.length, 3);
+});
+
+check("gallery is empty", () => {
+  assert.deepEqual(result9.gallery, []);
+});
+
+check("images are distributed by order to heading sections", () => {
+  // Image 1 → heading-0 (상단 요약), Image 2 → heading-1 (삼성), Image 3 → heading-2 (사모)
+  const sectionImagePairs: string[] = [];
+  let currentHeading = "";
+  for (const step of result9.plan) {
+    if (step.kind === "section") {
+      currentHeading = step.heading;
+    } else {
+      sectionImagePairs.push(`${step.id}→${currentHeading}`);
+    }
+  }
+  assert.deepEqual(sectionImagePairs, [
+    "samsung→상단 요약",
+    "private-credit→삼성전자 저평가 논점",
+    "trump→사모대출 불안",
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// Fixture 10: plain headings with MORE images than headings → overflow to gallery
+// ---------------------------------------------------------------------------
+
+banner("Fixture 10: plain headings with overflow");
+
+const body10 = `### A
+text a
+### B
+text b`;
+
+const images10: FixtureImage[] = [
+  { id: "i1", placement: "gallery", order: 1 },
+  { id: "i2", placement: "gallery", order: 2 },
+  { id: "i3", placement: "gallery", order: 3 },
+];
+
+const result10 = planRender(body10, images10);
+
+check("2 images inline, 1 overflow to gallery", () => {
+  const inlineCount = result10.plan.filter((s) => s.kind === "image").length;
+  assert.equal(inlineCount, 2);
+  assert.equal(result10.gallery.length, 1);
+  assert.equal(result10.gallery[0].id, "i3");
+});
+
+// ---------------------------------------------------------------------------
+// Fixture 8: getDisplayNewsItem regression (do not clobber DB body)
 //
 // Regression for the bug where the seed Korean translation layer in
 // `content-kr.ts` was spreading hardcoded `marketInterpretation` text on top
@@ -436,7 +704,7 @@ check("extractArticleAnchors is identity-equivalent to parser.anchors", () => {
 // with zero anchors and dropped every inline image into the bottom gallery.
 // ---------------------------------------------------------------------------
 
-banner("Fixture 7: getDisplayNewsItem regression (do not clobber DB body)");
+banner("Fixture 8: getDisplayNewsItem regression (do not clobber DB body)");
 
 const anchoredBody = `## 사실
 ### 삼성전자 저평가 논점 {#samsung-valuation}

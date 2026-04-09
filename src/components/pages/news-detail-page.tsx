@@ -70,24 +70,84 @@ export function NewsDetailPage({ id }: { id: string }) {
   // re-renders.
   const { sections, anchors } = parseArticleSections(articleBody);
 
-  // Resolve placement against the anchors actually present in the body. An
-  // image whose anchor no longer exists in the article falls back to gallery,
-  // so the image is never silently dropped.
+  // ---------------------------------------------------------------------------
+  // Image → anchor resolution.
+  //
+  // The parser may return explicit `{#id}` anchors (Pass 1) or synthetic
+  // `__heading-N__` anchors from plain headings (Pass 2 fallback). The
+  // resolution strategy adapts accordingly.
+  //
+  // When the body has EXPLICIT anchors:
+  //   Tier 1 – image.anchorKey matches an anchor → inline.
+  //   Tier 2 – images with NO anchorKey → auto-distribute to unclaimed
+  //            anchors by order.
+  //   Tier 3 – everything else → gallery.
+  //
+  // When the body has only PLAIN-HEADING (synthetic) anchors:
+  //   No image anchorKey can match a synthetic key, so Tier 1 is always
+  //   empty. ALL images are distributed to heading sections by order.
+  //   Overflow images → gallery.
+  // ---------------------------------------------------------------------------
+  const hasSyntheticAnchors =
+    anchors.length > 0 && anchors[0].anchorKey.startsWith("__heading-");
+
   const validAnchorKeys = new Set(anchors.map((anchor) => anchor.anchorKey));
   const inlineImagesByAnchor = new Map<string, NewsItemImage[]>();
   const galleryImages: NewsItemImage[] = [];
 
-  for (const image of allImages) {
-    if (
-      image.placement === "inline" &&
-      image.anchorKey &&
-      validAnchorKeys.has(image.anchorKey)
-    ) {
-      const next = inlineImagesByAnchor.get(image.anchorKey) ?? [];
-      next.push(image);
-      inlineImagesByAnchor.set(image.anchorKey, next);
+  if (hasSyntheticAnchors) {
+    // Fallback mode: body has plain headings, no `{#id}` markers.
+    // Distribute ALL images to heading sections by display order.
+    const sectionKeys = anchors.map((a) => a.anchorKey);
+    const matchCount = Math.min(sectionKeys.length, allImages.length);
+    for (let i = 0; i < matchCount; i++) {
+      inlineImagesByAnchor.set(sectionKeys[i], [allImages[i]]);
+    }
+    for (let i = matchCount; i < allImages.length; i++) {
+      galleryImages.push(allImages[i]);
+    }
+  } else {
+    // Normal mode: body has explicit `{#id}` anchors.
+    const unmatchedImages: NewsItemImage[] = [];
+
+    // Tier 1: explicit anchorKey match (regardless of `placement` field).
+    for (const image of allImages) {
+      if (image.anchorKey && validAnchorKeys.has(image.anchorKey)) {
+        const bucket = inlineImagesByAnchor.get(image.anchorKey) ?? [];
+        bucket.push(image);
+        inlineImagesByAnchor.set(image.anchorKey, bucket);
+      } else {
+        unmatchedImages.push(image);
+      }
+    }
+
+    // Tier 2: auto-match remaining images to unclaimed anchors by order.
+    const unclaimedAnchorKeys = anchors
+      .map((a) => a.anchorKey)
+      .filter((key) => !inlineImagesByAnchor.has(key));
+
+    const autoEligible: NewsItemImage[] = [];
+
+    for (const image of unmatchedImages) {
+      if (!image.anchorKey) {
+        autoEligible.push(image);
+      } else {
+        galleryImages.push(image);
+      }
+    }
+
+    if (unclaimedAnchorKeys.length > 0 && autoEligible.length > 0) {
+      const autoMatchCount = Math.min(unclaimedAnchorKeys.length, autoEligible.length);
+      for (let i = 0; i < autoMatchCount; i++) {
+        const bucket = inlineImagesByAnchor.get(unclaimedAnchorKeys[i]) ?? [];
+        bucket.push(autoEligible[i]);
+        inlineImagesByAnchor.set(unclaimedAnchorKeys[i], bucket);
+      }
+      for (let i = autoMatchCount; i < autoEligible.length; i++) {
+        galleryImages.push(autoEligible[i]);
+      }
     } else {
-      galleryImages.push(image);
+      galleryImages.push(...autoEligible);
     }
   }
 
@@ -200,7 +260,13 @@ export function NewsDetailPage({ id }: { id: string }) {
       ) : null}
 
       <SectionCard title="시장 해석" description="긴 해석 메모도 markdown 스타일로 읽기 좋게 렌더링합니다.">
-        <div className="space-y-4">
+        <div
+          className="space-y-4"
+          data-anchor-count={anchors.length}
+          data-total-images={allImages.length}
+          data-inline-count={allImages.length - galleryImages.length}
+          data-gallery-count={galleryImages.length}
+        >
           {sections.map((section, idx) => {
             const isPreamble = section.anchorKey === PREAMBLE_ANCHOR_KEY;
             const inlineImages = isPreamble
@@ -241,7 +307,12 @@ export function NewsDetailPage({ id }: { id: string }) {
         >
           <ul className="grid gap-4 sm:grid-cols-2">
             {galleryImages.map((image) => (
-              <li key={image.id}>
+              <li
+                key={image.id}
+                data-image-id={image.id}
+                data-image-placement={image.placement}
+                data-image-anchor={image.anchorKey ?? "none"}
+              >
                 <ArticleImage image={image} fallbackAlt={displayItem.title} />
               </li>
             ))}
