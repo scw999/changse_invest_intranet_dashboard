@@ -70,25 +70,76 @@ export function NewsDetailPage({ id }: { id: string }) {
   // re-renders.
   const { sections, anchors } = parseArticleSections(articleBody);
 
-  // Resolve placement against the anchors actually present in the body. An
-  // image whose anchor no longer exists in the article falls back to gallery,
-  // so the image is never silently dropped.
+  // ---------------------------------------------------------------------------
+  // Image → anchor resolution.
+  //
+  // Three tiers, evaluated in order. Each tier claims images that match; once
+  // claimed, an image is never re-evaluated by a lower tier.
+  //
+  // Tier 1 – explicit: image.anchorKey matches an anchor in the body.
+  //   This covers both `placement:"inline"` AND images that have an anchorKey
+  //   but whose `placement` field was never flipped to "inline" (a common edge
+  //   case caused by the server's `resolvePlacement` historically discarding
+  //   the anchor when `placement !== "inline"`).
+  //
+  // Tier 2 – auto-match by order: if the body has unclaimed anchored
+  //   subsections and there are remaining images without an explicit anchorKey,
+  //   distribute them to the unclaimed anchors in display-order. This covers
+  //   images that were uploaded without any inline metadata at all — the most
+  //   common real-world scenario when images arrive through the assistant
+  //   ingest or bulk upload path.
+  //
+  // Tier 3 – gallery fallback: everything else.
+  // ---------------------------------------------------------------------------
   const validAnchorKeys = new Set(anchors.map((anchor) => anchor.anchorKey));
   const inlineImagesByAnchor = new Map<string, NewsItemImage[]>();
+  const unmatchedImages: NewsItemImage[] = [];
+
+  // Tier 1: explicit anchorKey match (regardless of `placement` field).
+  for (const image of allImages) {
+    if (image.anchorKey && validAnchorKeys.has(image.anchorKey)) {
+      const bucket = inlineImagesByAnchor.get(image.anchorKey) ?? [];
+      bucket.push(image);
+      inlineImagesByAnchor.set(image.anchorKey, bucket);
+    } else {
+      unmatchedImages.push(image);
+    }
+  }
+
+  // Tier 2: auto-match remaining images to unclaimed anchors by order.
+  // Only images with NO anchorKey are eligible — an image with a broken
+  // anchorKey (non-null but not in the body) was targeted at a specific
+  // location and should not be silently relocated to a random anchor.
+  const unclaimedAnchorKeys = anchors
+    .map((a) => a.anchorKey)
+    .filter((key) => !inlineImagesByAnchor.has(key));
+
+  const autoEligible: NewsItemImage[] = [];
   const galleryImages: NewsItemImage[] = [];
 
-  for (const image of allImages) {
-    if (
-      image.placement === "inline" &&
-      image.anchorKey &&
-      validAnchorKeys.has(image.anchorKey)
-    ) {
-      const next = inlineImagesByAnchor.get(image.anchorKey) ?? [];
-      next.push(image);
-      inlineImagesByAnchor.set(image.anchorKey, next);
+  for (const image of unmatchedImages) {
+    if (!image.anchorKey) {
+      autoEligible.push(image);
     } else {
+      // Broken anchorKey → gallery (never silently relocated).
       galleryImages.push(image);
     }
+  }
+
+  if (unclaimedAnchorKeys.length > 0 && autoEligible.length > 0) {
+    const autoMatchCount = Math.min(unclaimedAnchorKeys.length, autoEligible.length);
+    for (let i = 0; i < autoMatchCount; i++) {
+      const anchorKey = unclaimedAnchorKeys[i];
+      const image = autoEligible[i];
+      const bucket = inlineImagesByAnchor.get(anchorKey) ?? [];
+      bucket.push(image);
+      inlineImagesByAnchor.set(anchorKey, bucket);
+    }
+    for (let i = autoMatchCount; i < autoEligible.length; i++) {
+      galleryImages.push(autoEligible[i]);
+    }
+  } else {
+    galleryImages.push(...autoEligible);
   }
 
   return (
@@ -200,7 +251,13 @@ export function NewsDetailPage({ id }: { id: string }) {
       ) : null}
 
       <SectionCard title="시장 해석" description="긴 해석 메모도 markdown 스타일로 읽기 좋게 렌더링합니다.">
-        <div className="space-y-4">
+        <div
+          className="space-y-4"
+          data-anchor-count={anchors.length}
+          data-total-images={allImages.length}
+          data-inline-count={allImages.length - galleryImages.length}
+          data-gallery-count={galleryImages.length}
+        >
           {sections.map((section, idx) => {
             const isPreamble = section.anchorKey === PREAMBLE_ANCHOR_KEY;
             const inlineImages = isPreamble
@@ -241,7 +298,12 @@ export function NewsDetailPage({ id }: { id: string }) {
         >
           <ul className="grid gap-4 sm:grid-cols-2">
             {galleryImages.map((image) => (
-              <li key={image.id}>
+              <li
+                key={image.id}
+                data-image-id={image.id}
+                data-image-placement={image.placement}
+                data-image-anchor={image.anchorKey ?? "none"}
+              >
                 <ArticleImage image={image} fallbackAlt={displayItem.title} />
               </li>
             ))}

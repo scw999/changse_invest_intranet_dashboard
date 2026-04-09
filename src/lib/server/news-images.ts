@@ -357,13 +357,19 @@ function resolvePlacement(
 ): { placement: NewsImagePlacement; anchorKey: string | null } {
   const normalizedAnchor = rawAnchorKey ? normalizeAnchorKey(rawAnchorKey) : null;
 
-  // Inline requires a valid anchor key. If anchor is invalid, fall back to
-  // gallery so the image is never silently dropped.
-  if (rawPlacement === "inline") {
-    if (!normalizedAnchor) {
-      return { placement: "gallery", anchorKey: null };
-    }
+  // A valid anchor key is the strongest signal that the image should be
+  // inline — auto-promote regardless of the explicit `placement` value.
+  // This prevents a common mismatch where a caller provides an anchorKey
+  // but forgets to also set `placement: "inline"`, which previously caused
+  // the anchor to be silently discarded and the image stuck in the gallery.
+  if (normalizedAnchor) {
     return { placement: "inline", anchorKey: normalizedAnchor };
+  }
+
+  // Explicit inline without a valid anchor key falls back to gallery so the
+  // image is never silently dropped.
+  if (rawPlacement === "inline") {
+    return { placement: "gallery", anchorKey: null };
   }
 
   return { placement: "gallery", anchorKey: null };

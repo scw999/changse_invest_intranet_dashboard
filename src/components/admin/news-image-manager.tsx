@@ -167,8 +167,16 @@ export function NewsImageManager({
     if (altChanged) updateEntry.alt = draft.alt;
     if (placementChanged) updateEntry.placement = draft.placement;
     if (anchorChanged || placementChanged) {
-      updateEntry.anchorKey =
-        draft.placement === "inline" ? draft.anchorKey.trim() : null;
+      // A non-empty anchor key is the strongest signal for inline placement.
+      // Always send it when present so the server can auto-promote. Previously
+      // the UI discarded the anchor when the dropdown wasn't set to "inline",
+      // silently breaking inline image placement.
+      const trimmedAnchor = draft.anchorKey.trim();
+      updateEntry.anchorKey = trimmedAnchor || null;
+      // Auto-promote placement when anchor is set.
+      if (trimmedAnchor && draft.placement !== "inline") {
+        updateEntry.placement = "inline";
+      }
     }
 
     await onMutate(
