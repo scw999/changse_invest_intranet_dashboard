@@ -33,7 +33,9 @@ values
   ('00000000-0000-0000-0000-000000000205', '11111111-1111-1111-1111-111111111111', 'TLT', 'iShares 20+ Year Treasury Bond ETF', 'NASDAQ', 'US', 'ETF', 'Clean duration expression for rates-path calls.'),
   ('00000000-0000-0000-0000-000000000206', '11111111-1111-1111-1111-111111111111', 'GLD', 'SPDR Gold Shares', 'NYSE Arca', 'GLOBAL', 'ETF', 'Liquid safe-haven and real-yield hedge expression.'),
   ('00000000-0000-0000-0000-000000000207', '11111111-1111-1111-1111-111111111111', '105560.KS', 'KB Financial', 'KRX', 'KR', 'Equities', 'Korean bank proxy for curve steepening and domestic policy support.'),
-  ('00000000-0000-0000-0000-000000000208', '11111111-1111-1111-1111-111111111111', '012450.KS', 'Hanwha Aerospace', 'KRX', 'KR', 'Equities', 'Defense export beneficiary tied to multi-year procurement pipelines.');
+  ('00000000-0000-0000-0000-000000000208', '11111111-1111-1111-1111-111111111111', '012450.KS', 'Hanwha Aerospace', 'KRX', 'KR', 'Equities', 'Defense export beneficiary tied to multi-year procurement pipelines.'),
+  ('00000000-0000-0000-0000-000000000209', '11111111-1111-1111-1111-111111111111', 'BTC-USD', 'Bitcoin', 'Crypto', 'GLOBAL', 'Crypto', 'Sentiment and liquidity-sensitive macro risk barometer.'),
+  ('00000000-0000-0000-0000-000000000210', '11111111-1111-1111-1111-111111111111', 'ETH-USD', 'Ethereum', 'Crypto', 'GLOBAL', 'Crypto', 'High-beta crypto beta tied to risk appetite, on-chain activity, and liquidity conditions.');
 
 insert into public.news_items (
   id,

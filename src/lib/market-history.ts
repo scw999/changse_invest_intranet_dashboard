@@ -37,12 +37,25 @@ type NasdaqHistoricalResponse = {
   } | null;
 };
 
+type CoinbaseCandle = [
+  time: number,
+  low: number,
+  high: number,
+  open: number,
+  close: number,
+  volume: number,
+];
+
 function normalizeSymbol(symbol: string) {
   return normalizeRepresentativeMarketSymbol(symbol);
 }
 
 function isKoreanTicker(symbol: string) {
   return /^\d{6}\.(KS|KQ)$/.test(symbol);
+}
+
+function isRepresentativeCryptoTicker(symbol: string) {
+  return /^(BTC|ETH)-USD$/.test(symbol);
 }
 
 function isCryptoTicker(symbol: string) {
@@ -239,6 +252,50 @@ async function fetchNaverHistory(symbol: string): Promise<MarketHistoryPoint[]> 
   return history;
 }
 
+async function fetchCoinbaseHistory(symbol: string): Promise<MarketHistoryPoint[]> {
+  const now = Math.floor(Date.now() / 1000);
+  const start = now - 60 * 60 * 24 * 180;
+  const url = new URL(`https://api.exchange.coinbase.com/products/${encodeURIComponent(symbol)}/candles`);
+  url.searchParams.set('granularity', '86400');
+  url.searchParams.set('start', new Date(start * 1000).toISOString());
+  url.searchParams.set('end', new Date(now * 1000).toISOString());
+
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      Accept: 'application/json',
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Coinbase returned ${response.status}`);
+  }
+
+  const payload = (await response.json()) as CoinbaseCandle[];
+  const history = payload
+    .map((candle) => {
+      const [time, , , , close] = candle;
+      if (!Number.isFinite(time) || !Number.isFinite(close)) {
+        return null;
+      }
+
+      return {
+        time: toIsoDate(time),
+        value: close,
+      } satisfies MarketHistoryPoint;
+    })
+    .filter((point): point is MarketHistoryPoint => point !== null)
+    .sort((left, right) => left.time.localeCompare(right.time))
+    .slice(-180);
+
+  if (history.length === 0) {
+    throw new Error(`Coinbase returned no chart data for ${symbol}`);
+  }
+
+  return history;
+}
+
 async function fetchNasdaqHistory(symbol: string): Promise<MarketHistoryPoint[]> {
   const today = new Date();
   const fromDate = new Date(today);
@@ -327,15 +384,22 @@ async function fetchStooqHistory(symbol: string): Promise<MarketHistoryPoint[]> 
 
 export async function fetchTickerHistory(symbol: string): Promise<MarketHistoryPoint[]> {
   const normalizedSymbol = normalizeSymbol(symbol);
-  const providers: Array<{ name: string; fetcher: () => Promise<MarketHistoryPoint[]> }> = [
-    { name: 'Yahoo Finance', fetcher: () => fetchYahooHistory(normalizedSymbol) },
-    ...(isCryptoTicker(normalizedSymbol)
-      ? []
-      : isKoreanTicker(normalizedSymbol)
-        ? [{ name: 'Naver Finance', fetcher: () => fetchNaverHistory(normalizedSymbol) }]
-        : [{ name: 'Nasdaq', fetcher: () => fetchNasdaqHistory(normalizedSymbol) },
-           { name: 'Stooq', fetcher: () => fetchStooqHistory(normalizedSymbol) }]),
-  ];
+  const providers: Array<{ name: string; fetcher: () => Promise<MarketHistoryPoint[]> }> = isRepresentativeCryptoTicker(
+    normalizedSymbol,
+  )
+    ? [
+        { name: 'Coinbase', fetcher: () => fetchCoinbaseHistory(normalizedSymbol) },
+        { name: 'Yahoo Finance', fetcher: () => fetchYahooHistory(normalizedSymbol) },
+      ]
+    : [
+        { name: 'Yahoo Finance', fetcher: () => fetchYahooHistory(normalizedSymbol) },
+        ...(isCryptoTicker(normalizedSymbol)
+          ? []
+          : isKoreanTicker(normalizedSymbol)
+            ? [{ name: 'Naver Finance', fetcher: () => fetchNaverHistory(normalizedSymbol) }]
+            : [{ name: 'Nasdaq', fetcher: () => fetchNasdaqHistory(normalizedSymbol) },
+               { name: 'Stooq', fetcher: () => fetchStooqHistory(normalizedSymbol) }]),
+      ];
   const failures: string[] = [];
 
   for (const provider of providers) {
