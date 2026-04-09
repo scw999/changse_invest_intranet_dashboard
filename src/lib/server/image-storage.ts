@@ -67,11 +67,13 @@ export async function processNewImages(
       id: imageId,
       storagePath,
       url,
+      mimeType: input.contentType,
       filename: input.filename,
       contentType: input.contentType,
-      caption: input.caption,
-      alt: input.alt,
+      caption: input.caption ?? "",
+      alt: input.alt ?? "",
       order: input.order ?? 0,
+      isCover: false,
       placement: input.placement ?? "gallery",
       anchorKey: input.anchorKey,
     });
@@ -99,11 +101,13 @@ export async function applyImageOperations(
         id: imageId,
         storagePath,
         url,
+        mimeType: op.contentType,
         filename: op.filename,
         contentType: op.contentType,
-        caption: op.caption,
-        alt: op.alt,
+        caption: op.caption ?? "",
+        alt: op.alt ?? "",
         order: op.order ?? 0,
+        isCover: false,
         placement: op.placement ?? "gallery",
         anchorKey: op.anchorKey,
       });
@@ -133,7 +137,7 @@ export async function applyImageOperations(
 
 export function buildContentMeta(
   monitoring: NewsMeta["monitoring"],
-  images?: ImageAttachment[],
+  images?: unknown[],
 ) {
   const meta: Record<string, unknown> = {};
   if (monitoring) {
