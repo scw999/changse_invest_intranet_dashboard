@@ -16,13 +16,29 @@ import { buildArchiveHref } from "@/lib/navigation";
 import { assetClassLabels, regionLabels } from "@/lib/localize";
 import { groupById } from "@/lib/selectors";
 import { useResearchStore } from "@/lib/store/research-store";
+import type { ResearchDataset } from "@/types/research";
 
-export function TickerDetailPage({ symbol }: { symbol: string }) {
-  const newsItems = useResearchStore((state) => state.newsItems);
-  const themes = useResearchStore((state) => state.themes);
-  const tickers = useResearchStore((state) => state.tickers);
-  const followUps = useResearchStore((state) => state.followUps);
-  const portfolioItems = useResearchStore((state) => state.portfolioItems);
+export function TickerDetailPage({
+  symbol,
+  fallbackDataset,
+}: {
+  symbol: string;
+  fallbackDataset?: ResearchDataset | null;
+}) {
+  const storeNewsItems = useResearchStore((state) => state.newsItems);
+  const storeThemes = useResearchStore((state) => state.themes);
+  const storeTickers = useResearchStore((state) => state.tickers);
+  const storeFollowUps = useResearchStore((state) => state.followUps);
+  const storePortfolioItems = useResearchStore((state) => state.portfolioItems);
+
+  const newsItems = storeNewsItems.length ? storeNewsItems : (fallbackDataset?.newsItems ?? []);
+  const themes = storeThemes.length ? storeThemes : (fallbackDataset?.themes ?? []);
+  const tickers = storeTickers.length ? storeTickers : (fallbackDataset?.tickers ?? []);
+  const followUps = storeFollowUps.length ? storeFollowUps : (fallbackDataset?.followUps ?? []);
+  const portfolioItems = storePortfolioItems.length
+    ? storePortfolioItems
+    : (fallbackDataset?.portfolioItems ?? []);
+
   const ticker = tickers.find((entry) => entry.symbol === decodeURIComponent(symbol));
   const themeMap = groupById(themes);
   const tickerMap = groupById(tickers);
