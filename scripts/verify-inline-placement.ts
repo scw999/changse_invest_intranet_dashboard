@@ -60,13 +60,17 @@ function planRender(body: string, images: FixtureImage[]) {
 
   const hasSyntheticAnchors =
     anchors.length > 0 && anchors[0].anchorKey.startsWith("__heading-");
+  const isPreambleOnly =
+    anchors.length === 0 && sections.length === 1 && sections[0].anchorKey === PREAMBLE_ANCHOR_KEY;
 
   const inlineByAnchor = new Map<string, FixtureImage[]>();
   const gallery: FixtureImage[] = [];
 
-  if (hasSyntheticAnchors) {
-    // Fallback mode: body has plain headings, no {#id} markers.
-    // Distribute ALL images to heading sections by display order.
+  if (isPreambleOnly && sorted.length > 0) {
+    // Case C: flat body, no headings. Render all images inline after preamble.
+    inlineByAnchor.set(PREAMBLE_ANCHOR_KEY, sorted);
+  } else if (hasSyntheticAnchors) {
+    // Case B: body has plain headings, no {#id} markers.
     const sectionKeys = anchors.map((a) => a.anchorKey);
     const matchCount = Math.min(sectionKeys.length, sorted.length);
     for (let i = 0; i < matchCount; i++) {
@@ -126,11 +130,9 @@ function planRender(body: string, images: FixtureImage[]) {
       heading: section.heading,
       level: section.level,
     });
-    if (section.anchorKey !== PREAMBLE_ANCHOR_KEY) {
-      const inline = inlineByAnchor.get(section.anchorKey) ?? [];
-      for (const image of inline) {
-        plan.push({ kind: "image", id: image.id, caption: image.caption });
-      }
+    const inline = inlineByAnchor.get(section.anchorKey) ?? [];
+    for (const image of inline) {
+      plan.push({ kind: "image", id: image.id, caption: image.caption });
     }
   }
 
@@ -415,9 +417,12 @@ check("parser emits a single preamble section, no anchors", () => {
   assert.equal(result4.anchors.length, 0);
 });
 
-check("gallery images still render", () => {
-  assert.equal(result4.gallery.length, 1);
-  assert.equal(result4.gallery[0].id, "g1");
+check("images render inline after preamble (not in gallery)", () => {
+  // With the flat-body fix, a preamble-only article renders its images
+  // inline after the body text inside "시장 해석". No gallery needed.
+  const imageSteps = result4.plan.filter((s) => s.kind === "image");
+  assert.equal(imageSteps.length, 1);
+  assert.equal(result4.gallery.length, 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -692,6 +697,54 @@ check("2 images inline, 1 overflow to gallery", () => {
   assert.equal(inlineCount, 2);
   assert.equal(result10.gallery.length, 1);
   assert.equal(result10.gallery[0].id, "i3");
+});
+
+// ---------------------------------------------------------------------------
+// Fixture 11: FLAT BODY (no headings at all) — the REAL production scenario.
+//
+// The actual article body is a single paragraph: "중동 변수는 단기적으로..."
+// with zero markdown headings. Images have placement:"gallery" and no
+// anchorKey. This is the exact data shape on the live production page.
+// Previously, all images went to the bottom gallery. Now they render
+// inline after the preamble text inside "시장 해석".
+// ---------------------------------------------------------------------------
+
+banner("Fixture 11: flat body (REAL production scenario)");
+
+const body11 = `중동 변수는 단기적으로 휴전 기대가 우세해지며 유가 급등 압력이 일부 완화됐지만, 지정학 리스크 프리미엄이 완전히 사라진 것은 아니다. 반면 삼성전자 실적 가시성은 오히려 강화됐고, 사모대출 쪽은 환매 제한 사례가 실제로 늘어나며 신용 스트레스 확인 국면으로 넘어갔다.`;
+
+const images11: FixtureImage[] = [
+  { id: "samsung-img", placement: "gallery", order: 1, caption: "삼성전자 실적 대비 시가총액 저평가 논점" },
+  { id: "private-credit-img", placement: "gallery", order: 2, caption: "사모대출 시장 불안과 환매 제한 이슈" },
+  { id: "trump-img", placement: "gallery", order: 3, caption: "트럼프의 48시간 발언" },
+];
+
+const result11 = planRender(body11, images11);
+
+check("flat body: all 3 images render inline (not in gallery)", () => {
+  const imageSteps = result11.plan.filter((s) => s.kind === "image");
+  assert.equal(imageSteps.length, 3, `expected 3 inline images, got ${imageSteps.length}`);
+});
+
+check("flat body: gallery is empty", () => {
+  assert.deepEqual(result11.gallery, []);
+});
+
+check("flat body: images appear after preamble section in plan", () => {
+  const flat: string[] = [];
+  for (const step of result11.plan) {
+    if (step.kind === "section") {
+      flat.push(`SECTION:${step.anchorKey}`);
+    } else {
+      flat.push(`IMAGE:${step.id}`);
+    }
+  }
+  assert.deepEqual(flat, [
+    `SECTION:${PREAMBLE_ANCHOR_KEY}`,
+    "IMAGE:samsung-img",
+    "IMAGE:private-credit-img",
+    "IMAGE:trump-img",
+  ]);
 });
 
 // ---------------------------------------------------------------------------
