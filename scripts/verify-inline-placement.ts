@@ -30,6 +30,8 @@ import {
   parseArticleSections,
   type ArticleSection,
 } from "../src/lib/article-anchors.ts";
+import { getDisplayNewsItem } from "../src/lib/content-kr.ts";
+import type { NewsItem } from "../src/types/research.ts";
 
 type FixtureImage = {
   id: string;
@@ -422,6 +424,111 @@ check("extractArticleAnchors is identity-equivalent to parser.anchors", () => {
   const viaHelper = extractArticleAnchors(body2);
   const viaParser = parseArticleSections(body2).anchors;
   assert.deepEqual(viaHelper, viaParser);
+});
+
+// ---------------------------------------------------------------------------
+// Fixture 7: getDisplayNewsItem must NOT clobber a body that contains anchors
+//
+// Regression for the bug where the seed Korean translation layer in
+// `content-kr.ts` was spreading hardcoded `marketInterpretation` text on top
+// of the DB row for any seed news id (e.g. "news-001"), stripping the
+// `{#id}` markers a real edit had introduced. The renderer then saw a body
+// with zero anchors and dropped every inline image into the bottom gallery.
+// ---------------------------------------------------------------------------
+
+banner("Fixture 7: getDisplayNewsItem regression (do not clobber DB body)");
+
+const anchoredBody = `## 사실
+### 삼성전자 저평가 논점 {#samsung-valuation}
+삼성전자 관련 본문 A
+
+### 사모대출 불안 {#private-credit-risk}
+사모대출 관련 본문 B
+
+### 트럼프 48시간 발언 {#trump-48h}
+트럼프 관련 본문 C`;
+
+// Build the smallest plausible NewsItem with the seed id whose Korean
+// override historically clobbered the body. Casts are ok here — the test only
+// touches `marketInterpretation` and we're not exercising other fields.
+const seededItem = {
+  id: "news-001",
+  contentType: "news",
+  title: "seeded title",
+  summary: "seeded summary",
+  sourceName: "test",
+  sourceUrl: "https://example.com",
+  publishedAt: "2026-04-09T00:00:00+09:00",
+  scanSlot: "09",
+  region: "KR",
+  affectedAssetClasses: [],
+  relatedThemeIds: [],
+  relatedTickerIds: [],
+  marketInterpretation: anchoredBody,
+  directionalView: "Bullish",
+  actionIdea: "act",
+  followUpStatus: "Pending",
+  followUpNote: "follow",
+  importance: "High",
+  createdAt: "2026-04-09T00:00:00+09:00",
+  updatedAt: "2026-04-09T00:00:00+09:00",
+} as unknown as NewsItem;
+
+const displayedSeed = getDisplayNewsItem(seededItem);
+
+check("getDisplayNewsItem preserves a non-empty body verbatim", () => {
+  assert.equal(displayedSeed.marketInterpretation, anchoredBody);
+});
+
+check("anchors survive the display layer for a seed id", () => {
+  const { anchors: displayedAnchors } = parseArticleSections(
+    displayedSeed.marketInterpretation,
+  );
+  assert.deepEqual(
+    displayedAnchors.map((anchor) => anchor.anchorKey),
+    ["samsung-valuation", "private-credit-risk", "trump-48h"],
+  );
+});
+
+check("inline images for a seed id render under their anchors, not in gallery", () => {
+  const seedImages: FixtureImage[] = [
+    { id: "samsung", placement: "inline", anchorKey: "samsung-valuation", order: 1 },
+    { id: "pc", placement: "inline", anchorKey: "private-credit-risk", order: 2 },
+    { id: "trump", placement: "inline", anchorKey: "trump-48h", order: 3 },
+  ];
+  // Plan against the *displayed* body — i.e. the body the renderer actually
+  // hands to parseArticleSections after running through getDisplayNewsItem.
+  const seedResult = planRender(displayedSeed.marketInterpretation, seedImages);
+  assert.deepEqual(seedResult.gallery, [], "gallery must be empty");
+  const flat: string[] = [];
+  let currentSection = "";
+  for (const step of seedResult.plan) {
+    if (step.kind === "section") {
+      currentSection = step.anchorKey;
+      flat.push(`SECTION:${currentSection}`);
+    } else {
+      flat.push(`IMAGE:${step.id}@${currentSection}`);
+    }
+  }
+  assert.deepEqual(flat, [
+    `SECTION:${PREAMBLE_ANCHOR_KEY}`,
+    "SECTION:samsung-valuation",
+    "IMAGE:samsung@samsung-valuation",
+    "SECTION:private-credit-risk",
+    "IMAGE:pc@private-credit-risk",
+    "SECTION:trump-48h",
+    "IMAGE:trump@trump-48h",
+  ]);
+});
+
+check("getDisplayNewsItem still falls back to override when DB field is empty", () => {
+  // An item with an empty `marketInterpretation` should still pick up the
+  // legacy Korean override — the fallback layer is preserved for backward
+  // compatibility with un-migrated seed entries.
+  const emptyItem = { ...seededItem, marketInterpretation: "" };
+  const displayed = getDisplayNewsItem(emptyItem);
+  assert.notEqual(displayed.marketInterpretation, "");
+  assert.match(displayed.marketInterpretation, /국내 베타/);
 });
 
 // ---------------------------------------------------------------------------

@@ -844,7 +844,10 @@ export function AdminPage() {
                 <NewsImageManager
                   newsItemId={item.id}
                   images={item.images ?? []}
-                  articleBody={getDisplayNewsItem(item).marketInterpretation}
+                  // Read directly from the saved DB body so anchor suggestions
+                  // reflect the actual `{#id}` markers an editor just typed,
+                  // not whatever a hardcoded override layer happens to carry.
+                  articleBody={item.marketInterpretation}
                   disabled={isSubmitting}
                   onMutate={(body, message) =>
                     runMutation(

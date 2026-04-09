@@ -55,10 +55,20 @@ export function NewsDetailPage({ id }: { id: string }) {
     ? [...item.images].sort((a, b) => a.order - b.order)
     : [];
 
+  // The renderer must parse anchors from the *actual* saved body, not from a
+  // display-layer copy. `getDisplayNewsItem` historically merged hardcoded
+  // Korean translations on top of legacy seed ids — if those overrides ever
+  // win for `marketInterpretation`, the body the parser sees has no
+  // `{#anchor-id}` markers and every inline image silently falls into the
+  // bottom gallery. Reading from `item.marketInterpretation` directly closes
+  // that loophole and matches the contract: the rendering pipeline parses the
+  // article content that was actually saved.
+  const articleBody = item.marketInterpretation ?? "";
+
   // Single deterministic pass over the article body. parseArticleSections is
   // a cheap line scan; the compiler keeps it from re-running on unrelated
   // re-renders.
-  const { sections, anchors } = parseArticleSections(displayItem.marketInterpretation);
+  const { sections, anchors } = parseArticleSections(articleBody);
 
   // Resolve placement against the anchors actually present in the body. An
   // image whose anchor no longer exists in the article falls back to gallery,
