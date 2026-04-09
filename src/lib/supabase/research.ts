@@ -46,6 +46,20 @@ type NewsRow = {
   updated_at: string;
 };
 
+type NewsImageRow = {
+  id: string;
+  news_item_id: string;
+  public_url: string;
+  storage_path: string;
+  mime_type: string;
+  caption: string;
+  alt: string;
+  display_order: number;
+  is_cover: boolean;
+  placement: "gallery" | "inline" | null;
+  anchor_key: string | null;
+};
+
 type FollowUpRow = {
   id: string;
   news_item_id: string;
@@ -104,6 +118,7 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
     newsResult,
     newsThemesResult,
     newsTickersResult,
+    newsImagesResult,
     followUpsResult,
     portfolioResult,
     preferencesResult,
@@ -122,6 +137,12 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
       .order("published_at", { ascending: false }),
     client.from("news_item_themes").select("news_item_id, theme_id"),
     client.from("news_item_tickers").select("news_item_id, ticker_id"),
+    client
+      .from("news_item_images")
+      .select(
+        "id, news_item_id, public_url, storage_path, mime_type, caption, alt, display_order, is_cover, placement, anchor_key",
+      )
+      .order("display_order", { ascending: true }),
     client
       .from("follow_up_records")
       .select("id, news_item_id, status, resolved_at, outcome_summary, result_note, market_impact")
@@ -144,6 +165,7 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
   ensureNoError(newsResult.error, "news_items");
   ensureNoError(newsThemesResult.error, "news_item_themes");
   ensureNoError(newsTickersResult.error, "news_item_tickers");
+  ensureNoError(newsImagesResult.error, "news_item_images");
   ensureNoError(followUpsResult.error, "follow_up_records");
   ensureNoError(portfolioResult.error, "portfolio_items");
   ensureNoError(preferencesResult.error, "user_preferences");
@@ -161,6 +183,13 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
     const next = tickerIdsByNews.get(row.news_item_id) ?? [];
     next.push(row.ticker_id);
     tickerIdsByNews.set(row.news_item_id, next);
+  }
+
+  const imagesByNews = new Map<string, NewsImageRow[]>();
+  for (const row of (newsImagesResult.data ?? []) as NewsImageRow[]) {
+    const next = imagesByNews.get(row.news_item_id) ?? [];
+    next.push(row);
+    imagesByNews.set(row.news_item_id, next);
   }
 
   const preferences = (preferencesResult.data as PreferenceRow | null) ?? {
@@ -191,29 +220,51 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
       assetClass: row.asset_class,
       note: row.note,
     })),
-    newsItems: ((newsResult.data ?? []) as NewsRow[]).map((row) => ({
-      id: row.id,
-      contentType: row.content_type ?? "news",
-      title: row.title,
-      summary: row.summary,
-      sourceName: row.source_name,
-      sourceUrl: row.source_url,
-      publishedAt: row.published_at,
-      scanSlot: row.scan_slot,
-      region: row.region,
-      affectedAssetClasses: row.affected_asset_classes ?? [],
-      relatedThemeIds: themeIdsByNews.get(row.id) ?? [],
-      relatedTickerIds: tickerIdsByNews.get(row.id) ?? [],
-      marketInterpretation: row.market_interpretation,
-      directionalView: row.directional_view,
-      actionIdea: row.action_idea,
-      followUpStatus: row.follow_up_status,
-      followUpNote: row.follow_up_note,
-      importance: row.importance,
-      monitoring: row.content_meta?.monitoring,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
+    newsItems: ((newsResult.data ?? []) as NewsRow[]).map((row) => {
+      const imageRows = imagesByNews.get(row.id) ?? [];
+      const images = imageRows.map((imageRow) => ({
+        id: imageRow.id,
+        url: imageRow.public_url,
+        storagePath: imageRow.storage_path,
+        mimeType: imageRow.mime_type,
+        caption: imageRow.caption,
+        alt: imageRow.alt,
+        order: imageRow.display_order,
+        isCover: imageRow.is_cover,
+        placement: (imageRow.placement === "inline" ? "inline" : "gallery") as
+          | "inline"
+          | "gallery",
+        anchorKey: imageRow.anchor_key ?? undefined,
+      }));
+
+      const cover = images.find((image) => image.isCover) ?? images[0];
+
+      return {
+        id: row.id,
+        contentType: row.content_type ?? "news",
+        title: row.title,
+        summary: row.summary,
+        sourceName: row.source_name,
+        sourceUrl: row.source_url,
+        publishedAt: row.published_at,
+        scanSlot: row.scan_slot,
+        region: row.region,
+        affectedAssetClasses: row.affected_asset_classes ?? [],
+        relatedThemeIds: themeIdsByNews.get(row.id) ?? [],
+        relatedTickerIds: tickerIdsByNews.get(row.id) ?? [],
+        marketInterpretation: row.market_interpretation,
+        directionalView: row.directional_view,
+        actionIdea: row.action_idea,
+        followUpStatus: row.follow_up_status,
+        followUpNote: row.follow_up_note,
+        importance: row.importance,
+        monitoring: row.content_meta?.monitoring,
+        images,
+        coverImageUrl: cover?.url,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    }),
     followUps: ((followUpsResult.data ?? []) as FollowUpRow[]).map((row) => ({
       id: row.id,
       newsItemId: row.news_item_id,

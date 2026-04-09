@@ -339,8 +339,28 @@ export function getDisplayTicker(ticker: Ticker) {
   return { ...ticker, ...tickerOverrides[ticker.id] };
 }
 
-export function getDisplayNewsItem(item: NewsItem) {
-  return { ...item, ...newsOverrides[item.id] };
+export function getDisplayNewsItem(item: NewsItem): NewsItem {
+  const override = newsOverrides[item.id];
+  if (!override) {
+    return item;
+  }
+
+  // The seed Korean overrides are a *fallback* for legacy items that pre-date
+  // the database editor. Any non-empty DB value must win, otherwise a saved
+  // edit to `marketInterpretation` (especially one that introduces inline
+  // image anchors like `### ... {#samsung-valuation}`) would get silently
+  // stomped by the hardcoded translation, breaking the inline image renderer
+  // because `parseArticleSections` would see a body with no `{#id}` markers.
+  const merged: NewsItem = { ...item };
+  for (const key of Object.keys(override) as Array<keyof NewsItem>) {
+    const current = merged[key];
+    const isEmptyString = typeof current === "string" && current.trim() === "";
+    if (current === undefined || current === null || isEmptyString) {
+      // The override is a Partial<NewsItem>, so the value matches the field.
+      (merged as Record<string, unknown>)[key as string] = override[key];
+    }
+  }
+  return merged;
 }
 
 export function getDisplayFollowUp(record: FollowUpRecord) {

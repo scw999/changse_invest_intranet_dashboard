@@ -27,6 +27,39 @@ type IdRow = { id: string };
 type ThemeLookupRow = { id: string; name: string; slug: string };
 type TickerLookupRow = { id: string; symbol: string; name: string };
 
+export type NewsImagePlacement = "gallery" | "inline";
+
+export type NewsImageAttachmentInput = {
+  filename?: string;
+  contentType?: string;
+  caption?: string;
+  alt?: string;
+  order?: number;
+  isCover?: boolean;
+  bufferBase64?: string;
+  url?: string;
+  placement?: NewsImagePlacement;
+  anchorKey?: string;
+};
+
+export type NewsImageMetadataPatch = {
+  imageId: string;
+  caption?: string;
+  alt?: string;
+  order?: number;
+  isCover?: boolean;
+  placement?: NewsImagePlacement;
+  anchorKey?: string | null;
+};
+
+export type NewsImageOperationsInput = {
+  add?: NewsImageAttachmentInput[];
+  update?: NewsImageMetadataPatch[];
+  reorder?: Array<{ imageId: string; order: number }>;
+  delete?: string[];
+  replaceAll?: boolean;
+};
+
 export type NewsMutationInput = {
   contentType?: ContentType;
   title: string;
@@ -53,7 +86,11 @@ export type NewsMutationInput = {
     triggerCondition?: string;
     nextCheckNote?: string;
   };
+  images?: NewsImageAttachmentInput[];
+  imageOperations?: NewsImageOperationsInput;
 };
+
+export type NewsPatchInput = Partial<NewsMutationInput>;
 
 export type ThemeMutationInput = {
   id?: string;
