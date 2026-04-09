@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 
 import { PageIntro } from "@/components/layout/page-intro";
@@ -14,6 +15,7 @@ import {
 } from "@/components/research/research-badges";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { InlineImageGroup, NewsImageGallery } from "@/components/ui/news-image";
 import { RichText } from "@/components/ui/rich-text";
 import { SectionCard } from "@/components/ui/section-card";
 import {
@@ -183,10 +185,7 @@ export function NewsDetailPage({ id }: { id: string }) {
         </div>
       </PageIntro>
 
-      <SectionCard
-        title="기본 정보"
-        description="카드에서는 요약만 보고, 상세에서는 해석과 액션, 후속 확인 포인트를 구조적으로 읽도록 구성했습니다."
-      >
+      <SectionCard title="기본 정보">
         <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[24px] border border-[var(--border-soft)] bg-[rgba(243,239,231,0.72)] p-5">
             <p className="text-xs font-semibold tracking-[0.18em] text-[var(--text-faint)] uppercase">
@@ -232,10 +231,7 @@ export function NewsDetailPage({ id }: { id: string }) {
       </SectionCard>
 
       {contentType === "monitoring" && item.monitoring ? (
-        <SectionCard
-          title="모니터링 포인트"
-          description="뉴스와 달리 추적 대상, 트리거 조건, 다음 확인 메모를 별도로 읽을 수 있게 분리했습니다."
-        >
+        <SectionCard title="모니터링 포인트">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-[22px] border border-[var(--border-soft)] bg-[rgba(229,239,236,0.58)] p-4">
               <p className="text-xs font-semibold tracking-[0.16em] text-[var(--text-faint)] uppercase">
@@ -264,6 +260,7 @@ export function NewsDetailPage({ id }: { id: string }) {
               </div>
             </div>
           </div>
+          <InlineImageGroup images={inlineBySection.get("monitoring") ?? []} />
         </SectionCard>
       ) : null}
 
@@ -328,10 +325,12 @@ export function NewsDetailPage({ id }: { id: string }) {
 
       <SectionCard title="액션 아이디어" description="의견형 기록은 가설, 비중 판단, 실행 아이디어가 잘 읽히도록 간격을 넉넉히 둡니다.">
         <RichText content={displayItem.actionIdea} />
+        <InlineImageGroup images={inlineBySection.get("action-idea") ?? []} />
       </SectionCard>
 
-      <SectionCard title="후속 메모" description="검증해야 할 항목과 follow-up 링크를 함께 확인할 수 있습니다.">
+      <SectionCard title="후속 메모">
         <RichText content={displayItem.followUpNote} />
+        <InlineImageGroup images={inlineBySection.get("follow-up") ?? []} />
         {followUp ? (
           <div className="mt-5">
             <Link
@@ -343,6 +342,12 @@ export function NewsDetailPage({ id }: { id: string }) {
           </div>
         ) : null}
       </SectionCard>
+
+      {galleryFallbackImages.length > 0 ? (
+        <SectionCard title="첨부 이미지">
+          <NewsImageGallery images={galleryFallbackImages} />
+        </SectionCard>
+      ) : null}
     </div>
   );
 }
