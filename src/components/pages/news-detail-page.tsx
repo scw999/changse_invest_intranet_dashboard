@@ -177,6 +177,9 @@ export function NewsDetailPage({ id }: { id: string }) {
           <RegionBadge value={displayItem.region} />
           <DirectionBadge value={displayItem.directionalView} />
           <FollowUpBadge value={displayItem.followUpStatus} />
+          {displayItem.strategyLabels?.map((label) => (
+            <StrategyLabelBadge key={label} value={label} />
+          ))}
           <Link
             href="/archive"
             className="inline-flex items-center rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(23,42,70,0.05)]"
