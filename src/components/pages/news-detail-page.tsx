@@ -31,17 +31,65 @@ const SECTION_ANCHOR_KEYS: Record<string, string[]> = {
   monitoring: ["monitoring", "모니터링"],
 };
 
+const ANCHORED_HEADING_RE = /^(#{2,6})\s+(.+?)\s*\{#([a-zA-Z0-9_-]+)\}\s*$/;
+
+type AnchoredMarkdownBlock = {
+  anchorKey?: string;
+  markdown: string;
+};
+
+function normalizeAnchorKey(value: string) {
+  return value.toLowerCase().trim().replace(/[\s_]/g, "-");
+}
+
+function parseAnchoredMarkdownBlocks(content?: string | null): AnchoredMarkdownBlock[] {
+  if (!content || !content.trim()) {
+    return [];
+  }
+
+  const lines = content.split(/\r?\n/);
+  const blocks: AnchoredMarkdownBlock[] = [];
+  let currentAnchorKey: string | undefined;
+  let currentLines: string[] = [];
+
+  const pushBlock = () => {
+    const markdown = currentLines.join("\n").trim();
+    if (!markdown) return;
+    blocks.push({ anchorKey: currentAnchorKey, markdown });
+  };
+
+  for (const line of lines) {
+    const match = line.match(ANCHORED_HEADING_RE);
+    if (match) {
+      pushBlock();
+      currentAnchorKey = normalizeAnchorKey(match[3]);
+      currentLines = [`${match[1]} ${match[2]}`];
+      continue;
+    }
+
+    currentLines.push(line);
+  }
+
+  pushBlock();
+  return blocks;
+}
+
 function classifyImages(images?: ImageAttachment[]) {
   if (!images || images.length === 0) {
-    return { inlineBySection: new Map<string, ImageAttachment[]>(), galleryImages: [] };
+    return {
+      inlineBySection: new Map<string, ImageAttachment[]>(),
+      inlineByAnchor: new Map<string, ImageAttachment[]>(),
+      galleryImages: [] as ImageAttachment[],
+    };
   }
 
   const inlineBySection = new Map<string, ImageAttachment[]>();
+  const inlineByAnchor = new Map<string, ImageAttachment[]>();
   const galleryImages: ImageAttachment[] = [];
 
   for (const image of images) {
     if (image.placement === "inline" && image.anchorKey) {
-      const normalizedKey = image.anchorKey.toLowerCase().replace(/[\s_]/g, "");
+      const normalizedKey = normalizeAnchorKey(image.anchorKey);
       let matchedSection: string | null = null;
 
       for (const [sectionKey, aliases] of Object.entries(SECTION_ANCHOR_KEYS)) {
@@ -51,19 +99,21 @@ function classifyImages(images?: ImageAttachment[]) {
         }
       }
 
-      if (!matchedSection) {
-        matchedSection = image.anchorKey;
+      if (matchedSection) {
+        const existing = inlineBySection.get(matchedSection) ?? [];
+        existing.push(image);
+        inlineBySection.set(matchedSection, existing);
+      } else {
+        const existing = inlineByAnchor.get(normalizedKey) ?? [];
+        existing.push(image);
+        inlineByAnchor.set(normalizedKey, existing);
       }
-
-      const existing = inlineBySection.get(matchedSection) ?? [];
-      existing.push(image);
-      inlineBySection.set(matchedSection, existing);
     } else {
       galleryImages.push(image);
     }
   }
 
-  return { inlineBySection, galleryImages };
+  return { inlineBySection, inlineByAnchor, galleryImages };
 }
 
 export function NewsDetailPage({ id }: { id: string }) {
@@ -76,11 +126,6 @@ export function NewsDetailPage({ id }: { id: string }) {
   const tickerMap = groupById(tickers);
   const followUp = followUps.find((entry) => entry.newsItemId === id);
 
-  const { inlineBySection, galleryImages } = useMemo(
-    () => classifyImages(item?.images),
-    [item?.images],
-  );
-
   if (!item) {
     return (
       <EmptyState
@@ -92,6 +137,34 @@ export function NewsDetailPage({ id }: { id: string }) {
 
   const displayItem = getDisplayNewsItem(item);
   const contentType = item.contentType ?? "news";
+
+  const { inlineBySection, inlineByAnchor, galleryImages } = useMemo(
+    () => classifyImages(item.images),
+    [item.images],
+  );
+
+  const marketInterpretationBlocks = useMemo(
+    () => parseAnchoredMarkdownBlocks(displayItem.marketInterpretation),
+    [displayItem.marketInterpretation],
+  );
+
+  const matchedMarketAnchors = useMemo(() => {
+    const anchors = new Set<string>();
+    for (const block of marketInterpretationBlocks) {
+      if (block.anchorKey && inlineByAnchor.has(block.anchorKey)) {
+        anchors.add(block.anchorKey);
+      }
+    }
+    return anchors;
+  }, [inlineByAnchor, marketInterpretationBlocks]);
+
+  const galleryFallbackImages = useMemo(() => {
+    const unmatchedInlineImages = Array.from(inlineByAnchor.entries())
+      .filter(([anchorKey]) => !matchedMarketAnchors.has(anchorKey))
+      .flatMap(([, images]) => images);
+
+    return [...galleryImages, ...unmatchedInlineImages].sort((a, b) => a.order - b.order);
+  }, [galleryImages, inlineByAnchor, matchedMarketAnchors]);
 
   return (
     <div className="space-y-6">
@@ -197,7 +270,20 @@ export function NewsDetailPage({ id }: { id: string }) {
       ) : null}
 
       <SectionCard title="시장 해석">
-        <RichText content={displayItem.marketInterpretation} />
+        {marketInterpretationBlocks.length > 0 ? (
+          <div className="space-y-6">
+            {marketInterpretationBlocks.map((block, index) => (
+              <div key={`${block.anchorKey ?? "block"}-${index}`} className="space-y-4">
+                <RichText content={block.markdown} />
+                {block.anchorKey ? (
+                  <InlineImageGroup images={inlineByAnchor.get(block.anchorKey) ?? []} />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <RichText content={displayItem.marketInterpretation} />
+        )}
         <InlineImageGroup images={inlineBySection.get("market-interpretation") ?? []} />
       </SectionCard>
 
@@ -221,9 +307,9 @@ export function NewsDetailPage({ id }: { id: string }) {
         ) : null}
       </SectionCard>
 
-      {galleryImages.length > 0 ? (
+      {galleryFallbackImages.length > 0 ? (
         <SectionCard title="첨부 이미지">
-          <NewsImageGallery images={galleryImages} />
+          <NewsImageGallery images={galleryFallbackImages} />
         </SectionCard>
       ) : null}
     </div>
