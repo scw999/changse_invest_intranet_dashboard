@@ -69,8 +69,13 @@ function toNewsPatchRow(payload: NewsPatchInput) {
   if (payload.followUpStatus !== undefined) row.follow_up_status = payload.followUpStatus;
   if (typeof payload.followUpNote === "string") row.follow_up_note = payload.followUpNote.trim();
   if (payload.importance !== undefined) row.importance = payload.importance;
-  if (payload.monitoring !== undefined) {
-    row.content_meta = payload.monitoring ? { monitoring: payload.monitoring } : {};
+  if (payload.monitoring !== undefined || payload.strategyLabels !== undefined) {
+    row.content_meta = {
+      ...(payload.monitoring ? { monitoring: payload.monitoring } : {}),
+      ...(payload.strategyLabels && payload.strategyLabels.length > 0
+        ? { strategyLabels: payload.strategyLabels }
+        : {}),
+    };
   }
 
   return row;
