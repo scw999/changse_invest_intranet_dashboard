@@ -3,35 +3,63 @@ export type MarketHistoryPoint = {
   value: number;
 };
 
-function toStooqSymbol(symbol: string) {
-  const normalized = symbol.trim().toLowerCase();
-  if (normalized.includes(".")) {
-    return normalized;
-  }
-  return `${normalized}.us`;
+type YahooChartResponse = {
+  chart?: {
+    result?: Array<{
+      timestamp?: number[];
+      indicators?: {
+        quote?: Array<{
+          close?: Array<number | null>;
+        }>;
+      };
+    }>;
+    error?: {
+      description?: string;
+    } | null;
+  };
+};
+
+function normalizeSymbol(symbol: string) {
+  return symbol.trim().toUpperCase();
 }
 
-function parseCsv(csv: string): MarketHistoryPoint[] {
-  const lines = csv.trim().split(/\r?\n/);
-  if (lines.length <= 1) return [];
+function toIsoDate(timestamp: number) {
+  return new Date(timestamp * 1000).toISOString().slice(0, 10);
+}
 
-  return lines
-    .slice(1)
-    .map((line) => line.split(","))
-    .filter((cols) => cols.length >= 5)
-    .map((cols) => ({
-      time: cols[0]?.trim(),
-      value: Number(cols[4]),
-    }))
-    .filter((point) => point.time && Number.isFinite(point.value));
+function parseYahooChart(payload: YahooChartResponse): MarketHistoryPoint[] {
+  const result = payload.chart?.result?.[0];
+  const timestamps = result?.timestamp ?? [];
+  const closes = result?.indicators?.quote?.[0]?.close ?? [];
+
+  return timestamps
+    .map((timestamp, index) => {
+      const value = closes[index];
+      if (!Number.isFinite(timestamp) || typeof value !== "number" || !Number.isFinite(value)) {
+        return null;
+      }
+
+      return {
+        time: toIsoDate(timestamp),
+        value,
+      } satisfies MarketHistoryPoint;
+    })
+    .filter((point): point is MarketHistoryPoint => point !== null)
+    .slice(-180);
 }
 
 export async function fetchTickerHistory(symbol: string): Promise<MarketHistoryPoint[]> {
-  const stooqSymbol = toStooqSymbol(symbol);
-  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSymbol)}&i=d`;
+  const normalizedSymbol = normalizeSymbol(symbol);
+  const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(normalizedSymbol)}`);
+  url.searchParams.set("range", "6mo");
+  url.searchParams.set("interval", "1d");
+  url.searchParams.set("includePrePost", "false");
+  url.searchParams.set("events", "div,splits");
+
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "changse-invest-dashboard/0.1",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      Accept: "application/json",
     },
     next: { revalidate: 60 * 60 },
   });
@@ -40,6 +68,11 @@ export async function fetchTickerHistory(symbol: string): Promise<MarketHistoryP
     throw new Error(`Failed to fetch market history for ${symbol}`);
   }
 
-  const csv = await response.text();
-  return parseCsv(csv).slice(-180);
+  const payload = (await response.json()) as YahooChartResponse;
+  const apiError = payload.chart?.error?.description;
+  if (apiError) {
+    throw new Error(apiError);
+  }
+
+  return parseYahooChart(payload);
 }

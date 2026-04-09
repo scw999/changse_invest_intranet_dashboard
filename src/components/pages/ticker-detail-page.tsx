@@ -64,7 +64,7 @@ export function TickerDetailPage({ symbol }: { symbol: string }) {
         </div>
       </PageIntro>
 
-      <SectionCard title="가격 차트" description="Stooq 일봉 기준 최근 6개월 종가 흐름입니다.">
+      <SectionCard title="가격 차트" description="최근 6개월 일봉 종가 흐름입니다.">
         <TickerMiniChart symbol={displayTicker.symbol} />
       </SectionCard>
 
