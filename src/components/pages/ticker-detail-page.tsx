@@ -6,6 +6,7 @@ import { PageIntro } from "@/components/layout/page-intro";
 import { FollowUpCard } from "@/components/research/follow-up-card";
 import { NewsCard } from "@/components/research/news-card";
 import { PortfolioCard } from "@/components/research/portfolio-card";
+import { TickerMiniChart } from "@/components/research/ticker-mini-chart";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RichText } from "@/components/ui/rich-text";
@@ -62,6 +63,10 @@ export function TickerDetailPage({ symbol }: { symbol: string }) {
           </Link>
         </div>
       </PageIntro>
+
+      <SectionCard title="가격 차트" description="Stooq 일봉 기준 최근 6개월 종가 흐름입니다.">
+        <TickerMiniChart symbol={displayTicker.symbol} />
+      </SectionCard>
 
       <SectionCard title="티커 노트" description="markdown 문법이 없어도 문단과 줄바꿈을 유지합니다.">
         <RichText content={displayTicker.note} />
