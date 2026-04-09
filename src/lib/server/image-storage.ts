@@ -138,6 +138,7 @@ export async function applyImageOperations(
 export function buildContentMeta(
   monitoring: NewsMeta["monitoring"],
   images?: unknown[],
+  strategyLabels?: string[],
 ) {
   const meta: Record<string, unknown> = {};
   if (monitoring) {
@@ -145,6 +146,9 @@ export function buildContentMeta(
   }
   if (images && images.length > 0) {
     meta.images = images;
+  }
+  if (strategyLabels && strategyLabels.length > 0) {
+    meta.strategyLabels = strategyLabels;
   }
   return meta;
 }

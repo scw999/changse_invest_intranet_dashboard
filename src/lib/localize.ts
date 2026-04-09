@@ -8,6 +8,7 @@ import type {
   PortfolioAssetType,
   PriorityLevel,
   Region,
+  StrategyLabel,
   ThemeCategory,
 } from "@/types/research";
 
@@ -84,4 +85,14 @@ export const contentTypeLabels: Record<ContentType, string> = {
   analysis: "분석",
   opinion: "투자 의견",
   monitoring: "모니터링",
+};
+
+export const strategyLabelLabels: Record<StrategyLabel, string> = {
+  Momentum: "모멘텀",
+  "Event-Driven": "이벤트 드리븐",
+  Policy: "정책 기대",
+  "Re-Rating": "재평가",
+  "Risk-Management": "리스크 관리",
+  "Follow-Up": "후속 추적",
+  Monitoring: "모니터링",
 };

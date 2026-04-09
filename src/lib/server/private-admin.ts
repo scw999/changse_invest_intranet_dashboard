@@ -10,6 +10,7 @@ import type {
   ImageAttachment,
   ImportanceLevel,
   NewsSortOption,
+  StrategyLabel,
   PortfolioAssetType,
   PriorityLevel,
   Region,
@@ -79,6 +80,7 @@ export type NewsMutationInput = {
   followUpStatus: FollowUpStatus;
   followUpNote: string;
   importance: ImportanceLevel;
+  strategyLabels?: StrategyLabel[];
   monitoring?: {
     targetTickers?: string[];
     note?: string;

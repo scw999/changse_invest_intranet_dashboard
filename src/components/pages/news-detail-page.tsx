@@ -12,6 +12,7 @@ import {
   ImportanceBadge,
   RegionBadge,
   SlotBadge,
+  StrategyLabelBadge,
 } from "@/components/research/research-badges";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";

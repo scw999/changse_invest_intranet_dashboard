@@ -9,6 +9,7 @@ import {
   ImportanceBadge,
   RegionBadge,
   SlotBadge,
+  StrategyLabelBadge,
 } from "@/components/research/research-badges";
 import { Badge } from "@/components/ui/badge";
 import { RichText } from "@/components/ui/rich-text";
@@ -45,6 +46,9 @@ export function NewsCard({
         {typeof relevanceScore === "number" ? (
           <Badge variant="outline">{`연관도 ${relevanceScore}점`}</Badge>
         ) : null}
+        {displayItem.strategyLabels?.map((label) => (
+          <StrategyLabelBadge key={label} value={label} />
+        ))}
       </div>
 
       <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">

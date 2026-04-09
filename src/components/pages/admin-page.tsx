@@ -25,6 +25,7 @@ import {
   followUpLabels,
   importanceLabels,
   regionLabels,
+  strategyLabelLabels,
   themeCategoryLabels,
 } from "@/lib/localize";
 import { useResearchStore } from "@/lib/store/research-store";
@@ -37,6 +38,7 @@ import {
   IMPORTANCE_LEVELS,
   REGIONS,
   SCAN_SLOTS,
+  STRATEGY_LABELS,
   THEME_CATEGORIES,
   type ContentType,
   type FollowUpRecord,
@@ -44,6 +46,7 @@ import {
   type ImagePlacement,
   type NewsItem,
   type ResearchDataset,
+  type StrategyLabel,
   type Theme,
 } from "@/types/research";
 
@@ -59,6 +62,7 @@ type NewsFormState = {
   affectedAssetClasses: NewsItem["affectedAssetClasses"];
   relatedThemeIds: string[];
   relatedTickerIds: string[];
+  strategyLabels: StrategyLabel[];
   marketInterpretation: string;
   directionalView: (typeof DIRECTIONAL_VIEWS)[number];
   actionIdea: string;
@@ -102,6 +106,7 @@ function getDefaultNewsForm(): NewsFormState {
     affectedAssetClasses: ["Equities"],
     relatedThemeIds: [],
     relatedTickerIds: [],
+    strategyLabels: [],
     marketInterpretation: "",
     directionalView: "Bullish",
     actionIdea: "",
@@ -132,6 +137,7 @@ function mapNewsItemToForm(item: NewsItem): NewsFormState {
     affectedAssetClasses: displayItem.affectedAssetClasses,
     relatedThemeIds: displayItem.relatedThemeIds,
     relatedTickerIds: displayItem.relatedTickerIds,
+    strategyLabels: displayItem.strategyLabels ?? [],
     marketInterpretation: displayItem.marketInterpretation,
     directionalView: displayItem.directionalView,
     actionIdea: displayItem.actionIdea,
@@ -685,6 +691,23 @@ export function AdminPage() {
                   relatedTickerIds: newsForm.relatedTickerIds.includes(value)
                     ? newsForm.relatedTickerIds.filter((entry) => entry !== value)
                     : [...newsForm.relatedTickerIds, value],
+                })
+              }
+            />
+
+            <TagSelector
+              label="전략 라벨"
+              options={STRATEGY_LABELS.map((entry) => ({
+                label: strategyLabelLabels[entry],
+                value: entry,
+              }))}
+              values={newsForm.strategyLabels}
+              onToggle={(value) =>
+                setNewsForm({
+                  ...newsForm,
+                  strategyLabels: newsForm.strategyLabels.includes(value as StrategyLabel)
+                    ? newsForm.strategyLabels.filter((entry) => entry !== value)
+                    : [...newsForm.strategyLabels, value as StrategyLabel],
                 })
               }
             />

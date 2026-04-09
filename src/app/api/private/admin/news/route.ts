@@ -158,7 +158,7 @@ function toNewsRow(payload: NewsMutationInput) {
     follow_up_status: payload.followUpStatus,
     follow_up_note: payload.followUpNote.trim(),
     importance: payload.importance,
-    content_meta: buildContentMeta(payload.monitoring, payload.images),
+    content_meta: buildContentMeta(payload.monitoring, payload.images, payload.strategyLabels),
   };
 }
 

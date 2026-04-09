@@ -50,6 +50,15 @@ export const NEWS_SORT_OPTIONS = [
   "source",
 ] as const;
 export const CONTENT_TYPES = ["news", "analysis", "opinion", "monitoring"] as const;
+export const STRATEGY_LABELS = [
+  "Momentum",
+  "Event-Driven",
+  "Policy",
+  "Re-Rating",
+  "Risk-Management",
+  "Follow-Up",
+  "Monitoring",
+] as const;
 
 export type ScanSlot = (typeof SCAN_SLOTS)[number];
 export type Region = (typeof REGIONS)[number];
@@ -62,6 +71,7 @@ export type ThemeCategory = (typeof THEME_CATEGORIES)[number];
 export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
 export type NewsSortOption = (typeof NEWS_SORT_OPTIONS)[number];
 export type ContentType = (typeof CONTENT_TYPES)[number];
+export type StrategyLabel = (typeof STRATEGY_LABELS)[number];
 
 export const NEWS_IMAGE_PLACEMENTS = ["gallery", "inline"] as const;
 export type NewsImagePlacement = (typeof NEWS_IMAGE_PLACEMENTS)[number];
@@ -142,6 +152,7 @@ export type NewsItem = {
   monitoring?: MonitoringMeta;
   images?: NewsItemImage[];
   coverImageUrl?: string;
+  strategyLabels?: StrategyLabel[];
   createdAt: string;
   updatedAt: string;
 };

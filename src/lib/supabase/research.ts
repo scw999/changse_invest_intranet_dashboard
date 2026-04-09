@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { ResearchDataset } from "@/types/research";
+import type { ResearchDataset, StrategyLabel } from "@/types/research";
 
 type ThemeRow = {
   id: string;
@@ -44,6 +44,7 @@ type NewsRow = {
   content_meta: {
     monitoring?: ResearchDataset["newsItems"][number]["monitoring"];
     images?: ResearchDataset["newsItems"][number]["images"];
+    strategyLabels?: StrategyLabel[];
   } | null;
   created_at: string;
   updated_at: string;
@@ -264,6 +265,7 @@ export async function fetchResearchDataset(client: SupabaseClient): Promise<Rese
         monitoring: row.content_meta?.monitoring,
         images,
         coverImageUrl: cover?.url,
+        strategyLabels: row.content_meta?.strategyLabels ?? [],
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };

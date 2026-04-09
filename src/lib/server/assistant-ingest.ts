@@ -9,6 +9,7 @@ import {
   FOLLOW_UP_STATUSES,
   IMAGE_PLACEMENTS,
   IMPORTANCE_LEVELS,
+  STRATEGY_LABELS,
   NEWS_SORT_OPTIONS,
   PORTFOLIO_ASSET_TYPES,
   PRIORITY_LEVELS,
@@ -123,6 +124,28 @@ const importanceAliasMap: Record<string, string> = {
   중간: "Medium",
   low: "Low",
   낮음: "Low",
+};
+
+const strategyLabelAliasMap: Record<string, string> = {
+  momentum: "Momentum",
+  모멘텀: "Momentum",
+  eventdriven: "Event-Driven",
+  event: "Event-Driven",
+  이벤트: "Event-Driven",
+  정책: "Policy",
+  policy: "Policy",
+  rerating: "Re-Rating",
+  rerate: "Re-Rating",
+  재평가: "Re-Rating",
+  riskmanagement: "Risk-Management",
+  risk: "Risk-Management",
+  리스크관리: "Risk-Management",
+  리스크: "Risk-Management",
+  followup: "Follow-Up",
+  "follow-up": "Follow-Up",
+  후속추적: "Follow-Up",
+  monitoring: "Monitoring",
+  모니터링: "Monitoring",
 };
 
 const portfolioAssetTypeAliasMap: Record<string, string> = {
@@ -391,6 +414,11 @@ const contentTypeField = z.preprocess(
   (value) => normalizeEnumValue(value, {}, CONTENT_TYPES),
   z.enum(CONTENT_TYPES),
 );
+const strategyLabelArrayField = z.preprocess(
+  (value) => normalizeStringArray(value).map((entry) => normalizeEnumValue(entry, strategyLabelAliasMap, STRATEGY_LABELS)).filter(Boolean),
+  z.array(z.enum(STRATEGY_LABELS)),
+);
+
 const priorityField = z.preprocess(
   (value) => normalizeEnumValue(value, importanceAliasMap, PRIORITY_LEVELS),
   z.enum(PRIORITY_LEVELS),
@@ -483,6 +511,7 @@ const upsertNewsBaseSchema = z.object({
   affectedAssetClasses: assetClassArrayField.optional(),
   relatedThemeIds: z.preprocess(normalizeStringArray, z.array(z.string()).default([])),
   relatedTickerIds: z.preprocess(normalizeStringArray, z.array(z.string()).default([])),
+  strategyLabels: strategyLabelArrayField.optional(),
   marketInterpretation: textField.optional(),
   directionalView: directionalViewField.optional(),
   actionIdea: textField.optional(),

@@ -5,6 +5,7 @@ import {
   followUpLabels,
   importanceLabels,
   regionLabels,
+  strategyLabelLabels,
 } from "@/lib/localize";
 import type {
   ContentType,
@@ -13,6 +14,7 @@ import type {
   ImportanceLevel,
   Region,
   ScanSlot,
+  StrategyLabel,
 } from "@/types/research";
 
 export function ImportanceBadge({ value }: { value: ImportanceLevel }) {
@@ -65,4 +67,18 @@ export function ContentTypeBadge({ value }: { value: ContentType }) {
   } as const;
 
   return <Badge variant={variantMap[value]}>{contentTypeLabels[value]}</Badge>;
+}
+
+export function StrategyLabelBadge({ value }: { value: StrategyLabel }) {
+  const variantMap = {
+    Momentum: "high",
+    "Event-Driven": "mixed",
+    Policy: "outline",
+    "Re-Rating": "bullish",
+    "Risk-Management": "bearish",
+    "Follow-Up": "pending",
+    Monitoring: "pending",
+  } as const;
+
+  return <Badge variant={variantMap[value]}>{strategyLabelLabels[value]}</Badge>;
 }
